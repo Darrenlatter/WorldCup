@@ -444,9 +444,15 @@ async function fetchLiveWorldCupScores() {
       const key  = `${home}-${away}`;
 
       if (match.score && match.score.ft && match.score.ft.length === 2) {
+        // Determine penalty winner: score.p gives pen scores after a draw (e.g. [4,3])
+        let penWinner = null;
+        if (match.score.ft[0] === match.score.ft[1] && match.score.p && match.score.p.length === 2) {
+          penWinner = match.score.p[0] > match.score.p[1] ? home : away;
+        }
         liveScoresCache[key] = {
           homeScore: match.score.ft[0],
           awayScore: match.score.ft[1],
+          penWinner: penWinner,
           status: 'completed'
         };
       }
@@ -561,7 +567,14 @@ function resolveKO(m) {
   const lookup = liveScoresCache[`${m.home}-${m.away}`];
   if (lookup && lookup.homeScore !== null) {
     m.homeScore=lookup.homeScore; m.awayScore=lookup.awayScore;
-    m.winner = lookup.homeScore>lookup.awayScore ? m.home : lookup.awayScore>lookup.homeScore ? m.away : null;
+    if (lookup.homeScore > lookup.awayScore) {
+      m.winner = m.home;
+    } else if (lookup.awayScore > lookup.homeScore) {
+      m.winner = m.away;
+    } else {
+      // Draw after 90 min — use penalty winner if available
+      m.winner = lookup.penWinner || null;
+    }
   }
 }
 
@@ -671,12 +684,15 @@ function renderBracketUI() {
       const aO = state.assignments[m.away] ? `(${state.assignments[m.away]})` : '';
       const hs = m.homeScore!=null ? m.homeScore : '';
       const as_ = m.awayScore!=null ? m.awayScore : '';
+      const penNote = (m.homeScore!=null && m.homeScore===m.awayScore && m.winner)
+        ? `<div style="text-align:center;font-size:0.7rem;color:#718096;margin-top:2px;">${m.winner} wins (pens)</div>`
+        : '';
       card.innerHTML=`
         <div style="display:flex;justify-content:space-between;width:100%;align-items:center;font-size:0.8rem;">
           <div style="font-weight:bold;width:40%;">${getFlagImg(m.home)} ${m.home}<br><small style="color:#718096">${escapeHTML(hO)}</small></div>
           <div style="width:20%;text-align:center;font-weight:bold;">${hs} : ${as_}</div>
           <div style="font-weight:bold;width:40%;text-align:right;">${m.away} ${getFlagImg(m.away)}<br><small style="color:#718096">${escapeHTML(aO)}</small></div>
-        </div>`;
+        </div>${penNote}`;
       col.appendChild(card);
     });
     container.appendChild(col);
