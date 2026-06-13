@@ -259,7 +259,7 @@ async function initAppEngine() {
   try {
     const res = await fetch(SWEEPSTAKE_DATA_URL + '?nocache=' + Date.now());
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = (await res.text()).trim();
+    const text = (await res.text()).replace(/[^A-Za-z0-9+/=]/g, '');
     if (!text || text === 'PASTE_GENERATED_STRING_HERE') throw new Error('empty');
 
     state = JSON.parse(atob(text));
