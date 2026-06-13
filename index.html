@@ -179,9 +179,9 @@ tr.qualify-wildcard { border-left: 4px solid var(--gold); background-color: #fff
 
 <script>
 // =========================================================================
-// CONFIGURATION: sweepstake data is loaded from sweepstake.txt in the repo root.
-// To update assignments, replace sweepstake.txt with a newly generated string.
-const SWEEPSTAKE_DATA_URL = './sweepstake.txt';
+// CONFIGURATION: sweepstake data is loaded from sweepstake.txt alongside this file.
+// To update assignments, replace sweepstake.txt in the repo with a newly generated string.
+const SWEEPSTAKE_DATA_URL = new URL('sweepstake.txt', document.baseURI).href;
 // =========================================================================
 
 // ─── DATA SOURCE ──────────────────────────────────────────────────────────
@@ -271,17 +271,24 @@ async function initAppEngine() {
     setInterval(fetchLiveWorldCupScores, 300000);
 
   } catch(e) {
-    // sweepstake.txt missing or empty — fall through to setup mode
-    b.style.backgroundColor = "#f0fff4";
-    b.style.color = "#276749";
-    b.style.borderLeftColor = "var(--secondary)";
-    b.innerHTML = "⚙️ <strong>Setup Mode:</strong> Add players, optionally pin manual team assignments, then click Generate.";
-    document.getElementById('add-player-btn').onclick = addSetupPlayer;
-    document.getElementById('player-name').onkeypress = ev => { if(ev.key==='Enter') addSetupPlayer(); };
-    document.getElementById('generate-sweep-btn').onclick = buildDistributionsString;
-    populateTeamDropdown();
-    switchTab('setup');
+    console.error('sweepstake.txt load error:', e);
+    // Show the real error so we can diagnose it
+    b.style.backgroundColor = "#fff5f5"; b.style.color = "#c53030"; b.style.borderLeftColor = "#fc8181";
+    b.innerHTML = `⚠️ <strong>Failed to load sweepstake.txt</strong> — ${e.message}
+      <br><small>Tried: <a href="${SWEEPSTAKE_DATA_URL}" target="_blank"><code>${SWEEPSTAKE_DATA_URL}</code></a> — click the link to check if the file is accessible.</small>
+      <br><br><button onclick="enterSetupMode()" style="margin-top:6px;font-size:0.85rem;padding:6px 12px;">Continue in Setup Mode</button>`;
   }
+}
+
+function enterSetupMode() {
+  const b = document.getElementById('api-status-banner');
+  b.style.backgroundColor = "#f0fff4"; b.style.color = "#276749"; b.style.borderLeftColor = "var(--secondary)";
+  b.innerHTML = "⚙️ <strong>Setup Mode:</strong> Add players, optionally pin manual team assignments, then click Generate.";
+  document.getElementById('add-player-btn').onclick = addSetupPlayer;
+  document.getElementById('player-name').onkeypress = ev => { if(ev.key==='Enter') addSetupPlayer(); };
+  document.getElementById('generate-sweep-btn').onclick = buildDistributionsString;
+  populateTeamDropdown();
+  switchTab('setup');
 }
 
 // ─── PLAYER MANAGEMENT ────────────────────────────────────────────────────
