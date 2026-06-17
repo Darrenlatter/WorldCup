@@ -777,8 +777,9 @@ function renderFixturesUI() {
         dateDisplay = m.matchDate;
       }
     }
-    const timeDisplay = m.matchTime ? `${m.matchTime} GMT` : '';
-    const locDisplay = m.location || 'Location TBC';
+    
+    // Time display updated to remove GMT
+    const timeDisplay = m.matchTime ? m.matchTime : '';
 
     row.innerHTML = `
       <div class="match-team home">
@@ -790,9 +791,8 @@ function renderFixturesUI() {
         <div style="font-weight: bold; font-size: 1.1rem; color: #2d3748; display: flex; gap: 12px; align-items: center;">
           ${hScore} <span style="font-size:0.7rem;color:#a0aec0">VS</span> ${aScore}
         </div>
-        <div style="font-size: 0.65rem; color: #718096; font-weight: normal; text-align: center; margin-top: 4px; line-height: 1.4;">
-          ${escapeHTML(dateDisplay)} ${escapeHTML(timeDisplay)}<br>
-          ${escapeHTML(locDisplay)}
+        <div style="font-size: 0.65rem; color: #718096; font-weight: normal; text-align: center; margin-top: 4px;">
+          ${escapeHTML(dateDisplay)} ${escapeHTML(timeDisplay)}
         </div>
       </div>
 
