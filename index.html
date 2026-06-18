@@ -53,7 +53,14 @@ tr.qualify-direct { border-left: 4px solid var(--secondary); background-color: #
 tr.qualify-wildcard { border-left: 4px solid var(--gold); background-color: #fffaf0; }
 .team-cell { display: flex; align-items: center; gap: 8px; font-weight: 500; }
 .flag { width: 20px; height: 14px; object-fit: cover; border-radius: 2px; border: 1px solid #ddd; display: inline-block; vertical-align: middle; }
+
+/* Status styling for assignment badges */
 .team-badge { font-weight: 600; padding: 6px 10px; border-radius: 4px; font-size: 0.85rem; background: #edf2f7; display: inline-flex; align-items: center; gap: 8px; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+.status-green { border-left: 4px solid var(--secondary); background-color: #f0fff4 !important; }
+.status-yellow { border-left: 4px solid var(--gold); background-color: #fffaf0 !important; }
+.status-red { border-left: 4px solid var(--accent); background-color: #fff5f5 !important; color: #718096 !important; }
+.status-red .flag { filter: grayscale(100%); opacity: 0.6; }
+
 .fixture-list { display: flex; flex-direction: column; gap: 10px; }
 .match-row { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: white; border: 1px solid var(--border); border-radius: 8px; }
 .match-team { width: 38%; font-size: 0.9rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
@@ -597,6 +604,34 @@ function processAndCalculateStandings() {
   });
   propagateKO('r32','r16'); propagateKO('r16','qf'); propagateKO('qf','sf'); propagateKO('sf','final');
 
+  // ----- TEAM PROGRESSION STATUS EVALUATION -----
+  window.teamStatuses = {};
+  
+  // 1. Evaluate Group Stage logic
+  Object.keys(standings).forEach(g => {
+    const grp = standings[g];
+    if (grp[0]) window.teamStatuses[grp[0].team] = 'green';
+    if (grp[1]) window.teamStatuses[grp[1].team] = 'green';
+    if (grp[2]) {
+      const isWc = wildcards.some(w => w.team === grp[2].team);
+      window.teamStatuses[grp[2].team] = isWc ? 'yellow' : 'red';
+    }
+    if (grp[3]) window.teamStatuses[grp[3].team] = 'red';
+  });
+
+  // 2. Evaluate Knockout logic (Overrides Group Stages)
+  ['r32', 'r16', 'qf', 'sf', 'final'].forEach(round => {
+    state.koMatches[round].forEach(m => {
+      if (m.homeScore != null && m.awayScore != null) {
+        const winner = getWinner(m);
+        const loser = winner === m.home ? m.away : (winner === m.away ? m.home : null);
+        if (winner) window.teamStatuses[winner] = 'green';
+        if (loser) window.teamStatuses[loser] = 'red';
+      }
+    });
+  });
+  // ----------------------------------------------
+
   renderAssignmentsGridUI();
   renderPlayerLeagueTableUI(standings);
   renderGroupTablesUI(standings, wildcards);
@@ -655,7 +690,8 @@ function renderAssignmentsGridUI() {
     const badges = inverted[player].map(t => {
       const src = state.assignmentSource?.[t];
       const badge = src==='manual' ? `<span class="badge-manual">📌 Manual</span>` : `<span class="badge-random">🎲 Random</span>`;
-      return `<div class="team-badge">${getFlagImg(t)} <strong>${t}</strong>${badge}</div>`;
+      const status = window.teamStatuses?.[t] || 'none';
+      return `<div class="team-badge status-${status}">${getFlagImg(t)} <strong>${t}</strong>${badge}</div>`;
     }).join('');
     card.innerHTML = `
       <div>
