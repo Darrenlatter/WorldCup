@@ -301,11 +301,8 @@ let state = {
 };
 let liveScoresCache = {}; 
 
-// --- UPDATED TIMEZONE PARSER ---
-// By mathematically subtracting the stadium timezone offset from the local stadium time,
-// we isolate the TRUE UTC time. We then pass that into Date.UTC() so the browser
-// can successfully format it into the user's local timezone.
-function convertToLocalTime(dateStr, timeStr, tzStr) {
+// 🎯 THE FIX: Robust timezone parsing with 2026 Host City location fallback
+function convertToLocalTime(dateStr, timeStr, tzStr, locationStr) {
   if (!dateStr) return { date: 'Date TBD', time: '' };
   
   try {
@@ -321,8 +318,9 @@ function convertToLocalTime(dateStr, timeStr, tzStr) {
 
     let offsetHours = 0;
     let offsetMinutes = 0;
+    let offsetFound = false;
 
-    // Extract the API's timezone offset (e.g., "UTC-6", "UTC-05:00", "UTC+1")
+    // 1. Try to read explicit UTC offset from the API if present
     if (tzStr && typeof tzStr === 'string' && tzStr.toUpperCase().includes('UTC')) {
       const offsetStr = tzStr.toUpperCase().split('UTC')[1].trim(); 
       if (offsetStr) {
@@ -331,13 +329,31 @@ function convertToLocalTime(dateStr, timeStr, tzStr) {
         const parts = cleanOffset.split(':');
         offsetHours = (parseInt(parts[0], 10) || 0) * sign;
         offsetMinutes = (parseInt(parts[1], 10) || 0) * sign;
+        offsetFound = true;
       }
     }
 
-    // Subtract the offset from the stadium time to get absolute UTC
+    // 2. The Fail-Safe: Deduce timezone mathematically from the 2026 stadium location
+    if (!offsetFound && locationStr) {
+      const loc = locationStr.toLowerCase();
+      // Eastern Daylight Time (UTC-4)
+      if (loc.includes('new york') || loc.includes('jersey') || loc.includes('boston') || loc.includes('foxborough') || loc.includes('philadelphia') || loc.includes('miami') || loc.includes('atlanta') || loc.includes('toronto')) {
+        offsetHours = -4; 
+      } 
+      // Central Daylight Time (UTC-5)
+      else if (loc.includes('dallas') || loc.includes('arlington') || loc.includes('houston') || loc.includes('kansas') || loc.includes('monterrey') || loc.includes('mexico') || loc.includes('guadalajara') || loc.includes('azteca') || loc.includes('bbva') || loc.includes('akron')) {
+        offsetHours = -5; 
+      } 
+      // Pacific Daylight Time (UTC-7)
+      else if (loc.includes('los angeles') || loc.includes('inglewood') || loc.includes('san francisco') || loc.includes('santa clara') || loc.includes('seattle') || loc.includes('vancouver') || loc.includes('bc place') || loc.includes('sofi') || loc.includes('levi')) {
+        offsetHours = -7; 
+      }
+    }
+
+    // Mathematically subtract the offset from the stadium time to get true absolute UTC
     const dateObj = new Date(Date.UTC(
       parseInt(dateParts[0], 10),
-      parseInt(dateParts[1], 10) - 1, 
+      parseInt(dateParts[1], 10) - 1, // JS dates are 0-indexed
       parseInt(dateParts[2], 10),
       hours - offsetHours,
       minutes - offsetMinutes
@@ -347,6 +363,7 @@ function convertToLocalTime(dateStr, timeStr, tzStr) {
       return { date: dateStr, time: timeStr || 'Time TBD' };
     }
 
+    // JS naturally reads the absolute UTC Object and returns it securely in the device's exact local zone
     return {
       date: dateObj.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }),
       time: timeStr ? dateObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'Time TBD'
@@ -505,10 +522,10 @@ async function fetchLiveWorldCupScores() {
     (data.matches || []).forEach(match => {
       const home = normaliseName(match.team1); const away = normaliseName(match.team2);
       const key = `${home}-${away}`;
-      // Capture timezone field from the API payload (fallback to UTC if missing)
+      
       let statusObj = { 
         homeScore: null, awayScore: null, status: 'upcoming', 
-        matchDate: match.date || '', matchTime: match.time || '', matchTimezone: match.timezone || 'UTC',
+        matchDate: match.date || '', matchTime: match.time || '', matchTimezone: match.timezone || '',
         location: match.stadium?.name || match.city || 'TBD' 
       };
 
@@ -533,7 +550,7 @@ async function fetchLiveWorldCupScores() {
 }
 
 function mockLiveCalculationsPipeline() {
-  if (!Object.keys(liveScoresCache).length) state.groupMatches.forEach(m => { liveScoresCache[`${m.home}-${m.away}`] = { homeScore: null, awayScore: null, status: 'upcoming', matchDate: '', matchTime: '', matchTimezone: 'UTC' }; });
+  if (!Object.keys(liveScoresCache).length) state.groupMatches.forEach(m => { liveScoresCache[`${m.home}-${m.away}`] = { homeScore: null, awayScore: null, status: 'upcoming', matchDate: '', matchTime: '', matchTimezone: '', location: '' }; });
   processAndCalculateStandings();
 }
 
@@ -546,7 +563,7 @@ function processAndCalculateStandings() {
     if (lookup) { 
       m.matchDate = lookup.matchDate; 
       m.matchTime = lookup.matchTime; 
-      m.matchTimezone = lookup.matchTimezone; // Assign timezone logic to internal state 
+      m.matchTimezone = lookup.matchTimezone; 
       m.location = lookup.location; 
     }
     if (lookup && lookup.homeScore !== null) {
@@ -607,7 +624,8 @@ function resolveKO(m) {
   if (lookup) {
     m.matchDate = lookup.matchDate;
     m.matchTime = lookup.matchTime;
-    m.matchTimezone = lookup.matchTimezone; // Assign timezone logic to internal state
+    m.matchTimezone = lookup.matchTimezone; 
+    m.location = lookup.location; // Ensures the knockout tree has access to stadium fallbacks
     
     if (lookup.homeScore !== null) {
       const reversed = !!liveScoresCache[`${m.away}-${m.home}`] && !liveScoresCache[`${m.home}-${m.away}`];
@@ -698,7 +716,8 @@ function renderFixturesUI() {
     const isLive = m.status === 'in_progress'; const row = document.createElement('div'); row.className = `match-row ${isLive ? 'live-active' : ''}`;
     const hScore = m.homeScore != null ? m.homeScore : '-'; const aScore = m.awayScore != null ? m.awayScore : '-';
 
-    const localDateTime = convertToLocalTime(m.matchDate, m.matchTime, m.matchTimezone); // Passed timezone
+    // Added m.location to function call to ensure stadium offset takes over if timezone string is missing
+    const localDateTime = convertToLocalTime(m.matchDate, m.matchTime, m.matchTimezone, m.location); 
     
     row.innerHTML = `
       <div class="match-team home">
@@ -731,7 +750,8 @@ function renderBracketUI() {
       const hO = state.assignments[m.home] ? `(${state.assignments[m.home]})` : ''; const aO = state.assignments[m.away] ? `(${state.assignments[m.away]})` : '';
       const hs = m.homeScore!=null ? m.homeScore : ''; const as_ = m.awayScore!=null ? m.awayScore : '';
       
-      const localDateTime = convertToLocalTime(m.matchDate, m.matchTime, m.matchTimezone); // Passed timezone
+      // Added m.location
+      const localDateTime = convertToLocalTime(m.matchDate, m.matchTime, m.matchTimezone, m.location); 
       
       let timeStr = localDateTime.time ? ` <span style="opacity:0.7">|</span> ${escapeHTML(localDateTime.time)}` : '';
       let timeHtml = `<div style="text-align:center;font-size:0.65rem;color:var(--subtext);margin-bottom:6px;font-weight:normal;background:var(--table-header);padding:4px;border-radius:4px;">
