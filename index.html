@@ -9,7 +9,7 @@
   --primary: #0052cc;
   --secondary: #078045;
   --dark: #1a202c;
-  --light: #f7fafc;
+  --light: #e1e4e6;
   --border: #e2e8f0;
   --accent: #e53e3e;
   --gold: #d69e2e;
@@ -53,7 +53,14 @@ tr.qualify-direct { border-left: 4px solid var(--secondary); background-color: #
 tr.qualify-wildcard { border-left: 4px solid var(--gold); background-color: #fffaf0; }
 .team-cell { display: flex; align-items: center; gap: 8px; font-weight: 500; }
 .flag { width: 20px; height: 14px; object-fit: cover; border-radius: 2px; border: 1px solid #ddd; display: inline-block; vertical-align: middle; }
+
+/* Status styling for assignment badges */
 .team-badge { font-weight: 600; padding: 6px 10px; border-radius: 4px; font-size: 0.85rem; background: #edf2f7; display: inline-flex; align-items: center; gap: 8px; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+.status-green { border-left: 4px solid var(--secondary); background-color: #f0fff4 !important; }
+.status-yellow { border-left: 4px solid var(--gold); background-color: #fffaf0 !important; }
+.status-red { border-left: 4px solid var(--accent); background-color: #fff5f5 !important; color: #718096 !important; }
+.status-red .flag { filter: grayscale(100%); opacity: 0.6; }
+
 .fixture-list { display: flex; flex-direction: column; gap: 10px; }
 .match-row { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: white; border: 1px solid var(--border); border-radius: 8px; }
 .match-team { width: 38%; font-size: 0.9rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
@@ -110,7 +117,6 @@ tr.qualify-wildcard { border-left: 4px solid var(--gold); background-color: #fff
 
   <div id="api-status-banner" class="status-banner">Verifying system initialization parameters...</div>
 
-  <!-- TAB 1 – SETUP -->
   <div id="tab-setup" class="tab-content">
     <div class="card">
       <h2>Sweepstake Initialization Wizard</h2>
@@ -127,7 +133,6 @@ tr.qualify-wildcard { border-left: 4px solid var(--gold); background-color: #fff
       </div>
       <ul id="staging-players-list" class="staging-list"></ul>
 
-      <!-- MANUAL ASSIGNMENT -->
       <div class="manual-assign-section">
         <h3>🎯 Manual Team Assignments <span style="font-size:0.8rem;color:#718096;font-weight:normal;">(optional)</span></h3>
         <p>Pin specific teams to specific participants before generating. Pinned assignments are locked in — the remaining teams are distributed randomly.</p>
@@ -161,12 +166,10 @@ tr.qualify-wildcard { border-left: 4px solid var(--gold); background-color: #fff
     </div>
   </div>
 
-  <!-- TAB 2 – ASSIGNMENTS -->
   <div id="tab-assignments" class="tab-content hidden">
     <div class="assignments-grid" id="pool-assignments-ui"></div>
   </div>
 
-  <!-- TAB 3 – PLAYER LEAGUE TABLE -->
   <div id="tab-playertable" class="tab-content hidden">
     <div class="card">
       <h2>🏆 Sweepstake Participant League Table</h2>
@@ -182,12 +185,10 @@ tr.qualify-wildcard { border-left: 4px solid var(--gold); background-color: #fff
     </div>
   </div>
 
-  <!-- TAB 4 – GROUPS -->
   <div id="tab-groups" class="tab-content hidden">
     <div class="groups-grid" id="groups-tables-ui"></div>
   </div>
 
-  <!-- TAB 5 – FIXTURES -->
   <div id="tab-fixtures" class="tab-content hidden">
     <div class="card">
       <h2>Tournament Match Ledger</h2>
@@ -195,7 +196,6 @@ tr.qualify-wildcard { border-left: 4px solid var(--gold); background-color: #fff
     </div>
   </div>
 
-  <!-- TAB 6 – BRACKET -->
   <div id="tab-bracket" class="tab-content hidden">
     <div class="bracket-wrapper" id="bracket-tree-ui"></div>
   </div>
@@ -271,7 +271,7 @@ let state = {
   isGenerated: false, groupMatches: [],
   koMatches: { r32:[], r16:[], qf:[], sf:[], final:[] }
 };
-let liveScoresCache = {};  // key: "HomeTeam-AwayTeam" → { homeScore, awayScore, status }
+let liveScoresCache = {};  // key: "HomeTeam-AwayTeam" → { homeScore, awayScore, status, location, matchDate, matchTime }
 
 // ─── INIT ──────────────────────────────────────────────────────────────────
 initAppEngine();
@@ -296,7 +296,6 @@ async function initAppEngine() {
 
   } catch(e) {
     console.error('sweepstake.txt load error:', e);
-    // Show the real error so we can diagnose it
     b.style.backgroundColor = "#fff5f5"; b.style.color = "#c53030"; b.style.borderLeftColor = "#fc8181";
     b.innerHTML = `⚠️ <strong>Failed to load sweepstake.txt</strong> — ${e.message}
       <br><small>Tried: <a href="${SWEEPSTAKE_DATA_URL}" target="_blank"><code>${SWEEPSTAKE_DATA_URL}</code></a> — click the link to check if the file is accessible.</small>
@@ -431,7 +430,7 @@ function buildDistributionsString() {
   const pinned  = new Set(Object.keys(manualPins));
   const shuffled = flat.filter(t => !pinned.has(t)).sort(() => Math.random() - 0.5);
 
-  state.assignments     = { ...manualPins };
+  state.assignments      = { ...manualPins };
   state.assignmentSource = {};
   Object.keys(manualPins).forEach(t => { state.assignmentSource[t] = 'manual'; });
   shuffled.forEach((team, idx) => {
@@ -477,31 +476,39 @@ async function fetchLiveWorldCupScores() {
       const away = normaliseName(match.team2);
       const key  = `${home}-${away}`;
 
+      // Extract metadata
+      const loc = match.stadium ? match.stadium.name : (match.city || 'Location TBD');
+      const mDate = match.date || '';
+      const mTime = match.time || '';
+
+      let statusObj = { 
+        homeScore: null, 
+        awayScore: null, 
+        status: 'upcoming', 
+        matchDate: mDate, 
+        matchTime: mTime, 
+        location: loc 
+      };
+
       if (match.score && match.score.ft && match.score.ft.length === 2) {
-        // Determine penalty winner: score.p gives pen scores after a draw (e.g. [4,3])
+        // Determine penalty winner
         let penWinner = null;
         if (match.score.ft[0] === match.score.ft[1] && match.score.p && match.score.p.length === 2) {
           penWinner = match.score.p[0] > match.score.p[1] ? home : away;
         }
-        liveScoresCache[key] = {
-          homeScore: match.score.ft[0],
-          awayScore: match.score.ft[1],
-          penWinner: penWinner,
-          status: 'completed'
-        };
+        statusObj.homeScore = match.score.ft[0];
+        statusObj.awayScore = match.score.ft[1];
+        statusObj.penWinner = penWinner;
+        statusObj.status = 'completed';
       }
-      // Half-time only (game in progress): score.ht available but no ft yet
+      // Half-time only
       else if (match.score && match.score.ht) {
-        liveScoresCache[key] = {
-          homeScore: match.score.ht[0],
-          awayScore: match.score.ht[1],
-          status: 'in_progress'
-        };
+        statusObj.homeScore = match.score.ht[0];
+        statusObj.awayScore = match.score.ht[1];
+        statusObj.status = 'in_progress';
       }
-      // Fixture with no score yet — still register so we know the match exists
-      else {
-        liveScoresCache[key] = { homeScore: null, awayScore: null, status: 'upcoming' };
-      }
+
+      liveScoresCache[key] = statusObj;
     });
 
     const played = Object.values(liveScoresCache).filter(m => m.status !== 'upcoming').length;
@@ -520,7 +527,6 @@ async function fetchLiveWorldCupScores() {
 }
 
 function mockLiveCalculationsPipeline() {
-  // Keep any scores we already have; don't wipe on retry failure
   if (!Object.keys(liveScoresCache).length) {
     state.groupMatches.forEach(m => {
       liveScoresCache[`${m.home}-${m.away}`] = { homeScore: null, awayScore: null, status: 'upcoming' };
@@ -540,6 +546,14 @@ function processAndCalculateStandings() {
 
   state.groupMatches.forEach(m => {
     const lookup = liveScoresCache[`${m.home}-${m.away}`] || liveScoresCache[`${m.away}-${m.home}`];
+    
+    // Transfer the metadata to the match object
+    if (lookup) {
+      m.matchDate = lookup.matchDate;
+      m.matchTime = lookup.matchTime;
+      m.location = lookup.location;
+    }
+
     if (lookup && lookup.homeScore !== null) {
       // Reverse scores if lookup was keyed away-home
       const reversed = !!liveScoresCache[`${m.away}-${m.home}`] && !liveScoresCache[`${m.home}-${m.away}`];
@@ -590,6 +604,34 @@ function processAndCalculateStandings() {
   });
   propagateKO('r32','r16'); propagateKO('r16','qf'); propagateKO('qf','sf'); propagateKO('sf','final');
 
+  // ----- TEAM PROGRESSION STATUS EVALUATION -----
+  window.teamStatuses = {};
+  
+  // 1. Evaluate Group Stage logic
+  Object.keys(standings).forEach(g => {
+    const grp = standings[g];
+    if (grp[0]) window.teamStatuses[grp[0].team] = 'green';
+    if (grp[1]) window.teamStatuses[grp[1].team] = 'green';
+    if (grp[2]) {
+      const isWc = wildcards.some(w => w.team === grp[2].team);
+      window.teamStatuses[grp[2].team] = isWc ? 'yellow' : 'red';
+    }
+    if (grp[3]) window.teamStatuses[grp[3].team] = 'red';
+  });
+
+  // 2. Evaluate Knockout logic (Overrides Group Stages)
+  ['r32', 'r16', 'qf', 'sf', 'final'].forEach(round => {
+    state.koMatches[round].forEach(m => {
+      if (m.homeScore != null && m.awayScore != null) {
+        const winner = getWinner(m);
+        const loser = winner === m.home ? m.away : (winner === m.away ? m.home : null);
+        if (winner) window.teamStatuses[winner] = 'green';
+        if (loser) window.teamStatuses[loser] = 'red';
+      }
+    });
+  });
+  // ----------------------------------------------
+
   renderAssignmentsGridUI();
   renderPlayerLeagueTableUI(standings);
   renderGroupTablesUI(standings, wildcards);
@@ -607,7 +649,6 @@ function resolveKO(m) {
     } else if (lookup.awayScore > lookup.homeScore) {
       m.winner = m.away;
     } else {
-      // Draw after 90 min — use penalty winner if available
       m.winner = lookup.penWinner || null;
     }
   }
@@ -649,7 +690,8 @@ function renderAssignmentsGridUI() {
     const badges = inverted[player].map(t => {
       const src = state.assignmentSource?.[t];
       const badge = src==='manual' ? `<span class="badge-manual">📌 Manual</span>` : `<span class="badge-random">🎲 Random</span>`;
-      return `<div class="team-badge">${getFlagImg(t)} <strong>${t}</strong>${badge}</div>`;
+      const status = window.teamStatuses?.[t] || 'none';
+      return `<div class="team-badge status-${status}">${getFlagImg(t)} <strong>${t}</strong>${badge}</div>`;
     }).join('');
     card.innerHTML = `
       <div>
@@ -661,10 +703,7 @@ function renderAssignmentsGridUI() {
   });
 }
 
-// Aggregates each participant's combined points/goals across all their assigned teams,
-// using the already-computed per-team group `standings` (team, p, w, d, l, gf, ga, gd).
 function computePlayerLeagueStandings(standings) {
-  // Flatten all team-rows from every group into one lookup by team name.
   const teamRowByName = {};
   Object.values(standings).forEach(rows => {
     rows.forEach(row => { teamRowByName[row.team] = row; });
@@ -677,7 +716,7 @@ function computePlayerLeagueStandings(standings) {
 
   Object.keys(state.assignments).forEach(team => {
     const player = state.assignments[team];
-    if (!byPlayer[player]) return; // assigned to a player no longer in the list
+    if (!byPlayer[player]) return;
     const row = teamRowByName[team];
     if (!row) return;
     const agg = byPlayer[player];
@@ -759,20 +798,45 @@ function renderFixturesUI() {
       const h3=document.createElement('h3'); h3.style.cssText='margin:20px 0 10px 0;color:var(--primary);';
       h3.innerText=`Group ${currentGroup} Results`; container.appendChild(h3);
     }
-    const isLive = m.status==='in_progress';
-    const row=document.createElement('div'); row.className=`match-row ${isLive?'live-active':''}`;
-    const hScore = m.homeScore!=null ? m.homeScore : '-';
-    const aScore = m.awayScore!=null ? m.awayScore : '-';
-    row.innerHTML=`
+    
+    const isLive = m.status === 'in_progress';
+    const row = document.createElement('div'); 
+    row.className = `match-row ${isLive ? 'live-active' : ''}`;
+    const hScore = m.homeScore != null ? m.homeScore : '-';
+    const aScore = m.awayScore != null ? m.awayScore : '-';
+
+    let dateDisplay = 'Date TBC';
+    if (m.matchDate) {
+      try {
+        dateDisplay = new Date(m.matchDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      } catch(e) {
+        dateDisplay = m.matchDate;
+      }
+    }
+    
+    // Time display updated to remove GMT
+    const timeDisplay = m.matchTime ? m.matchTime : '';
+
+    row.innerHTML = `
       <div class="match-team home">
         <span>${m.home}<br><small style="font-weight:normal;color:#718096">(${escapeHTML(state.assignments[m.home]||'')})</small></span>
         ${getFlagImg(m.home)}
       </div>
-      <div class="match-scores">${hScore} <span style="font-size:0.7rem;color:#a0aec0">VS</span> ${aScore}</div>
+      
+      <div style="width: 32%; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <div style="font-weight: bold; font-size: 1.1rem; color: #2d3748; display: flex; gap: 12px; align-items: center;">
+          ${hScore} <span style="font-size:0.7rem;color:#a0aec0">VS</span> ${aScore}
+        </div>
+        <div style="font-size: 0.65rem; color: #718096; font-weight: normal; text-align: center; margin-top: 4px;">
+          ${escapeHTML(dateDisplay)} ${escapeHTML(timeDisplay)}
+        </div>
+      </div>
+
       <div class="match-team away">
         ${getFlagImg(m.away)}
         <span>${m.away}<br><small style="font-weight:normal;color:#718096">(${escapeHTML(state.assignments[m.away]||'')})</small></span>
       </div>`;
+      
     container.appendChild(row);
   });
 }
