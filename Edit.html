@@ -301,8 +301,11 @@ let state = {
 };
 let liveScoresCache = {}; 
 
-// FIX: Manual parsing and explicit Date.UTC() creation to force cross-browser timezone conversion
-function convertToLocalTime(dateStr, timeStr) {
+// --- UPDATED TIMEZONE PARSER ---
+// By mathematically subtracting the stadium timezone offset from the local stadium time,
+// we isolate the TRUE UTC time. We then pass that into Date.UTC() so the browser
+// can successfully format it into the user's local timezone.
+function convertToLocalTime(dateStr, timeStr, tzStr) {
   if (!dateStr) return { date: 'Date TBD', time: '' };
   
   try {
@@ -316,17 +319,30 @@ function convertToLocalTime(dateStr, timeStr) {
       minutes = parseInt(timeParts[1], 10) || 0;
     }
 
-    // Force the browser to read the components as UTC, then return the object.
-    // Note: JS Date months are 0-indexed, so we subtract 1 from the month.
+    let offsetHours = 0;
+    let offsetMinutes = 0;
+
+    // Extract the API's timezone offset (e.g., "UTC-6", "UTC-05:00", "UTC+1")
+    if (tzStr && typeof tzStr === 'string' && tzStr.toUpperCase().includes('UTC')) {
+      const offsetStr = tzStr.toUpperCase().split('UTC')[1].trim(); 
+      if (offsetStr) {
+        const sign = offsetStr.startsWith('-') ? -1 : 1;
+        const cleanOffset = offsetStr.replace(/[+-]/g, '');
+        const parts = cleanOffset.split(':');
+        offsetHours = (parseInt(parts[0], 10) || 0) * sign;
+        offsetMinutes = (parseInt(parts[1], 10) || 0) * sign;
+      }
+    }
+
+    // Subtract the offset from the stadium time to get absolute UTC
     const dateObj = new Date(Date.UTC(
       parseInt(dateParts[0], 10),
       parseInt(dateParts[1], 10) - 1, 
       parseInt(dateParts[2], 10),
-      hours,
-      minutes
+      hours - offsetHours,
+      minutes - offsetMinutes
     ));
 
-    // Fallback if the parsing resulted in an invalid internal timestamp
     if (isNaN(dateObj.getTime())) {
       return { date: dateStr, time: timeStr || 'Time TBD' };
     }
@@ -489,7 +505,12 @@ async function fetchLiveWorldCupScores() {
     (data.matches || []).forEach(match => {
       const home = normaliseName(match.team1); const away = normaliseName(match.team2);
       const key = `${home}-${away}`;
-      let statusObj = { homeScore: null, awayScore: null, status: 'upcoming', matchDate: match.date || '', matchTime: match.time || '', location: match.stadium?.name || match.city || 'TBD' };
+      // Capture timezone field from the API payload (fallback to UTC if missing)
+      let statusObj = { 
+        homeScore: null, awayScore: null, status: 'upcoming', 
+        matchDate: match.date || '', matchTime: match.time || '', matchTimezone: match.timezone || 'UTC',
+        location: match.stadium?.name || match.city || 'TBD' 
+      };
 
       if (match.score && match.score.ft && match.score.ft.length === 2) {
         let penWinner = null;
@@ -512,7 +533,7 @@ async function fetchLiveWorldCupScores() {
 }
 
 function mockLiveCalculationsPipeline() {
-  if (!Object.keys(liveScoresCache).length) state.groupMatches.forEach(m => { liveScoresCache[`${m.home}-${m.away}`] = { homeScore: null, awayScore: null, status: 'upcoming' }; });
+  if (!Object.keys(liveScoresCache).length) state.groupMatches.forEach(m => { liveScoresCache[`${m.home}-${m.away}`] = { homeScore: null, awayScore: null, status: 'upcoming', matchDate: '', matchTime: '', matchTimezone: 'UTC' }; });
   processAndCalculateStandings();
 }
 
@@ -522,7 +543,12 @@ function processAndCalculateStandings() {
 
   state.groupMatches.forEach(m => {
     const lookup = liveScoresCache[`${m.home}-${m.away}`] || liveScoresCache[`${m.away}-${m.home}`];
-    if (lookup) { m.matchDate = lookup.matchDate; m.matchTime = lookup.matchTime; m.location = lookup.location; }
+    if (lookup) { 
+      m.matchDate = lookup.matchDate; 
+      m.matchTime = lookup.matchTime; 
+      m.matchTimezone = lookup.matchTimezone; // Assign timezone logic to internal state 
+      m.location = lookup.location; 
+    }
     if (lookup && lookup.homeScore !== null) {
       const reversed = !!liveScoresCache[`${m.away}-${m.home}`] && !liveScoresCache[`${m.home}-${m.away}`];
       m.homeScore = reversed ? lookup.awayScore : lookup.homeScore; m.awayScore = reversed ? lookup.homeScore : lookup.awayScore; m.status = lookup.status;
@@ -581,6 +607,7 @@ function resolveKO(m) {
   if (lookup) {
     m.matchDate = lookup.matchDate;
     m.matchTime = lookup.matchTime;
+    m.matchTimezone = lookup.matchTimezone; // Assign timezone logic to internal state
     
     if (lookup.homeScore !== null) {
       const reversed = !!liveScoresCache[`${m.away}-${m.home}`] && !liveScoresCache[`${m.home}-${m.away}`];
@@ -671,7 +698,7 @@ function renderFixturesUI() {
     const isLive = m.status === 'in_progress'; const row = document.createElement('div'); row.className = `match-row ${isLive ? 'live-active' : ''}`;
     const hScore = m.homeScore != null ? m.homeScore : '-'; const aScore = m.awayScore != null ? m.awayScore : '-';
 
-    const localDateTime = convertToLocalTime(m.matchDate, m.matchTime);
+    const localDateTime = convertToLocalTime(m.matchDate, m.matchTime, m.matchTimezone); // Passed timezone
     
     row.innerHTML = `
       <div class="match-team home">
@@ -704,7 +731,7 @@ function renderBracketUI() {
       const hO = state.assignments[m.home] ? `(${state.assignments[m.home]})` : ''; const aO = state.assignments[m.away] ? `(${state.assignments[m.away]})` : '';
       const hs = m.homeScore!=null ? m.homeScore : ''; const as_ = m.awayScore!=null ? m.awayScore : '';
       
-      const localDateTime = convertToLocalTime(m.matchDate, m.matchTime);
+      const localDateTime = convertToLocalTime(m.matchDate, m.matchTime, m.matchTimezone); // Passed timezone
       
       let timeStr = localDateTime.time ? ` <span style="opacity:0.7">|</span> ${escapeHTML(localDateTime.time)}` : '';
       let timeHtml = `<div style="text-align:center;font-size:0.65rem;color:var(--subtext);margin-bottom:6px;font-weight:normal;background:var(--table-header);padding:4px;border-radius:4px;">
