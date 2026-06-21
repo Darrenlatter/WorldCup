@@ -301,26 +301,34 @@ let state = {
 };
 let liveScoresCache = {}; 
 
-// FIX: Bulletproof Timezone Conversion to catch Invalid Dates gracefully
+// FIX: Manual parsing and explicit Date.UTC() creation to force cross-browser timezone conversion
 function convertToLocalTime(dateStr, timeStr) {
   if (!dateStr) return { date: 'Date TBD', time: '' };
   
   try {
-    let isoString;
+    const dateParts = dateStr.split('-');
+    if (dateParts.length !== 3) return { date: dateStr, time: timeStr || 'Time TBD' };
+
+    let hours = 0, minutes = 0;
     if (timeStr) {
-      let t = timeStr.trim();
-      // Ensure HH:mm:ss format for ISO string safety
-      if (t.split(':').length === 2) t += ':00'; 
-      isoString = `${dateStr}T${t}Z`;
-    } else {
-      isoString = `${dateStr}T00:00:00Z`; // Fallback to midnight if missing
+      const timeParts = timeStr.trim().split(':');
+      hours = parseInt(timeParts[0], 10) || 0;
+      minutes = parseInt(timeParts[1], 10) || 0;
     }
-    
-    const dateObj = new Date(isoString);
-    
-    // JS won't throw an error for bad dates, it just returns an 'Invalid Date' object. Catch it here:
-    if (isNaN(dateObj)) {
-      return { date: dateStr, time: timeStr || '' }; 
+
+    // Force the browser to read the components as UTC, then return the object.
+    // Note: JS Date months are 0-indexed, so we subtract 1 from the month.
+    const dateObj = new Date(Date.UTC(
+      parseInt(dateParts[0], 10),
+      parseInt(dateParts[1], 10) - 1, 
+      parseInt(dateParts[2], 10),
+      hours,
+      minutes
+    ));
+
+    // Fallback if the parsing resulted in an invalid internal timestamp
+    if (isNaN(dateObj.getTime())) {
+      return { date: dateStr, time: timeStr || 'Time TBD' };
     }
 
     return {
@@ -328,7 +336,7 @@ function convertToLocalTime(dateStr, timeStr) {
       time: timeStr ? dateObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'Time TBD'
     };
   } catch(e) {
-    return { date: dateStr, time: timeStr || '' };
+    return { date: dateStr, time: timeStr || 'Time TBD' };
   }
 }
 
@@ -686,7 +694,6 @@ function renderFixturesUI() {
   });
 }
 
-// FIX: Ensure Knockout tree renders the Date/Time fallback properly even when matchup data is pending
 function renderBracketUI() {
   const container = document.getElementById('bracket-tree-ui'); container.innerHTML='';
   const rounds = [ {key:'r32',title:'Round of 32'},{key:'r16',title:'Round of 16'}, {key:'qf',title:'Quarter-Finals'},{key:'sf',title:'Semi-Finals'},{key:'final',title:'Grand Final'} ];
