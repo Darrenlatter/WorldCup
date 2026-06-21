@@ -301,24 +301,34 @@ let state = {
 };
 let liveScoresCache = {}; 
 
-// Convert UTC dates to User Local Time
+// FIX: Bulletproof Timezone Conversion to catch Invalid Dates gracefully
 function convertToLocalTime(dateStr, timeStr) {
-  if (!dateStr) return { date: 'Date TBC', time: '' };
-  if (!timeStr) {
-    try {
-      return { date: new Date(dateStr).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }), time: '' };
-    } catch(e) { return { date: dateStr, time: '' }; }
-  }
+  if (!dateStr) return { date: 'Date TBD', time: '' };
   
   try {
-    // API provides match dates and times standard UTC format. Append 'Z' to parse strictly as UTC
-    const utcDate = new Date(`${dateStr}T${timeStr}:00Z`);
+    let isoString;
+    if (timeStr) {
+      let t = timeStr.trim();
+      // Ensure HH:mm:ss format for ISO string safety
+      if (t.split(':').length === 2) t += ':00'; 
+      isoString = `${dateStr}T${t}Z`;
+    } else {
+      isoString = `${dateStr}T00:00:00Z`; // Fallback to midnight if missing
+    }
+    
+    const dateObj = new Date(isoString);
+    
+    // JS won't throw an error for bad dates, it just returns an 'Invalid Date' object. Catch it here:
+    if (isNaN(dateObj)) {
+      return { date: dateStr, time: timeStr || '' }; 
+    }
+
     return {
-      date: utcDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }),
-      time: utcDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+      date: dateObj.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }),
+      time: timeStr ? dateObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'Time TBD'
     };
   } catch(e) {
-    return { date: dateStr, time: timeStr };
+    return { date: dateStr, time: timeStr || '' };
   }
 }
 
@@ -665,7 +675,7 @@ function renderFixturesUI() {
           ${hScore} <span style="font-size:0.7rem;color:var(--subtext)">VS</span> ${aScore}
         </div>
         <div style="font-size: 0.65rem; color: var(--subtext); font-weight: normal; text-align: center; margin-top: 4px;">
-          ${escapeHTML(localDateTime.date)} ${escapeHTML(localDateTime.time)}
+          ${escapeHTML(localDateTime.date)} <br> ${escapeHTML(localDateTime.time)}
         </div>
       </div>
       <div class="match-team away">
@@ -676,6 +686,7 @@ function renderFixturesUI() {
   });
 }
 
+// FIX: Ensure Knockout tree renders the Date/Time fallback properly even when matchup data is pending
 function renderBracketUI() {
   const container = document.getElementById('bracket-tree-ui'); container.innerHTML='';
   const rounds = [ {key:'r32',title:'Round of 32'},{key:'r16',title:'Round of 16'}, {key:'qf',title:'Quarter-Finals'},{key:'sf',title:'Semi-Finals'},{key:'final',title:'Grand Final'} ];
@@ -687,9 +698,14 @@ function renderBracketUI() {
       const hs = m.homeScore!=null ? m.homeScore : ''; const as_ = m.awayScore!=null ? m.awayScore : '';
       
       const localDateTime = convertToLocalTime(m.matchDate, m.matchTime);
-      let timeHtml = (m.matchDate || m.matchTime) ? `<div style="text-align:center;font-size:0.65rem;color:var(--subtext);margin-bottom:6px;">${escapeHTML(localDateTime.date)} ${escapeHTML(localDateTime.time)}</div>` : '';
+      
+      let timeStr = localDateTime.time ? ` <span style="opacity:0.7">|</span> ${escapeHTML(localDateTime.time)}` : '';
+      let timeHtml = `<div style="text-align:center;font-size:0.65rem;color:var(--subtext);margin-bottom:6px;font-weight:normal;background:var(--table-header);padding:4px;border-radius:4px;">
+        ${escapeHTML(localDateTime.date)}${timeStr}
+      </div>`;
 
       const penNote = (m.homeScore!=null && m.homeScore===m.awayScore && m.winner) ? `<div style="text-align:center;font-size:0.7rem;color:var(--subtext);margin-top:2px;">${m.winner} wins (pens)</div>` : '';
+      
       card.innerHTML=`
         ${timeHtml}
         <div style="display:flex;justify-content:space-between;width:100%;align-items:center;font-size:0.8rem;">
