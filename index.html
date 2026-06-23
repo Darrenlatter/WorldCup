@@ -168,6 +168,28 @@ body.dark .status-red {
   background-color: var(--status-red-bg) !important;
   color: #a0aec0 !important;
 }
+  
+* Dark mode – group standings highlight rows */
+body.dark tr.qualify-direct {
+  border-left: 4px solid var(--status-green-border);
+  background-color: var(--status-green-bg);
+}
+
+body.dark tr.qualify-wildcard {
+  border-left: 4px solid var(--status-yellow-border);
+  background-color: var(--status-yellow-bg);
+}
+
+/* Optional: make eliminated rows slightly dimmer */
+body.dark tr {
+  background-color: transparent;
+}
+
+body.dark table th {
+  background-color: #111827;
+  color: #cbd5e0;
+}
+
 </style>
 </head>
 <body>
