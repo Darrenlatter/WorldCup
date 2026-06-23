@@ -143,8 +143,22 @@ body.dark textarea {
 </head>
 <body>
 <header>
-  <h1>FIFA World Cup 2026™ Live Sweepstake Engine</h1>
-  <p><span class="live-pulse"></span> Dynamic Real-Time Tournament Feed</p>
+
+  <div style="display:flex;align-items:center;justify-content:center;gap:15px;flex-wrap:wrap;">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/1/17/2026_FIFA_World_Cup_emblem.svg"
+         style="height:60px;">
+    <div>
+      <h1>FIFA World Cup 2026™ Live Sweepstake Engine</h1>
+      <p><span style="color:#00ffcc;">●</span> Live Tournament Feed</p>
+    </div>
+  </div>
+
+  <div style="margin-top:12px;">
+    <button onclick="toggleDarkMode()" id="theme-toggle">
+      🌙 Dark Mode
+    </button>
+  </div>
+
 </header>
 <div class="container">
   <div class="tabs" id="main-tabs-nav">
