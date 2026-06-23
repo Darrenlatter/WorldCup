@@ -139,6 +139,35 @@ body.dark textarea {
   color: white;
   border-color: var(--border);
 }
+
+/* Dark mode – deeper status colours */
+body.dark {
+  --status-green-bg: #0f2d1e;
+  --status-green-border: #2f855a;
+
+  --status-yellow-bg: #2d2a12;
+  --status-yellow-border: #b7791f;
+
+  --status-red-bg: #2a1515;
+  --status-red-border: #c53030;
+}
+
+/* Override badge styles in dark mode */
+body.dark .status-green {
+  border-left: 4px solid var(--status-green-border);
+  background-color: var(--status-green-bg) !important;
+}
+
+body.dark .status-yellow {
+  border-left: 4px solid var(--status-yellow-border);
+  background-color: var(--status-yellow-bg) !important;
+}
+
+body.dark .status-red {
+  border-left: 4px solid var(--status-red-border);
+  background-color: var(--status-red-bg) !important;
+  color: #a0aec0 !important;
+}
 </style>
 </head>
 <body>
