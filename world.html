@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2026 World Cup Tracker</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f4f4f9;
+      color: #333;
+    }
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    input {
+      padding: 10px;
+      font-size: 16px;
+      width: 200px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      padding: 10px 15px;
+      font-size: 16px;
+      background-color: #0056b3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #004494;
+    }
+    pre {
+      background: #2b2b2b;
+      color: #f8f8f2;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      max-height: 400px;
+    }
+    .highlight {
+      font-weight: bold;
+      color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🏆 2026 World Cup Data</h1>
+
+  <div class="card">
+    <h2>1. Find Team's Best Stage</h2>
+    <input type="text" id="teamInput" placeholder="e.g. Argentina, France" value="Argentina">
+    <button onclick="calculateBestStage()">Get Best Stage</button>
+    <p id="bestStageResult">Enter a team name to see how far they made it.</p>
+  </div>
+
+  <div class="card">
+    <h2>2. Knockout Section Data</h2>
+    <button onclick="loadKnockoutData()">Load Knockout Matches</button>
+    <p>Displays raw matches from Round of 32 to the Final.</p>
+    <pre id="knockoutResult">Waiting for data...</pre>
+  </div>
+
+  <script>
+    // URL for the 2026 openfootball json data
+    const DATA_URL = 'https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json';
+    
+    // Global variable to cache the fetched data
+    let tournamentData = null;
+
+    // The standard stages in order of progression
+    const stageHierarchy = {
+      "Group Stage": 1,
+      "Round of 32": 2,
+      "Round of 16": 3,
+      "Quarter-finals": 4,
+      "Semi-finals": 5,
+      "Play-off for third place": 6,
+      "Final": 7
+    };
+
+    /**
+     * Fetches the worldcup data. Caches it after the first request.
+     */
+    async function fetchWorldCupData() {
+      if (tournamentData) return tournamentData;
+      try {
+        const response = await fetch(DATA_URL);
+        if (!response.ok) throw new Error("Network response was not ok");
+        tournamentData = await response.json();
+        return tournamentData;
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        alert("Failed to fetch World Cup data. Ensure the 2026 JSON exists in the openfootball repo.");
+        return null;
+      }
+    }
+
+    /**
+     * Extracts and calculates the furthest stage a team reached.
+     */
+    async function calculateBestStage() {
+      const teamName = document.getElementById('teamInput').value.trim();
+      if (!teamName) return;
+
+      const data = await fetchWorldCupData();
+      if (!data) return;
+
+      let bestStageName = "Did not qualify / Not found";
+      let maxStageValue = 0;
+
+      // openfootball uses a "rounds" array containing matches
+      data.rounds.forEach(round => {
+        // Normalize group matchdays to "Group Stage"
+        const roundName = round.name.startsWith("Matchday") ? "Group Stage" : round.name;
+        const stageValue = stageHierarchy[roundName] || 0;
+
+        round.matches.forEach(match => {
+          // OpenFootball team names are usually stored as match.team1.name or match.team1 (string)
+          const t1 = match.team1?.name || match.team1;
+          const t2 = match.team2?.name || match.team2;
+
+          // If the selected team played in this match
+          if (t1.toLowerCase() === teamName.toLowerCase() || t2.toLowerCase() === teamName.toLowerCase()) {
+            if (stageValue > maxStageValue) {
+              maxStageValue = stageValue;
+              bestStageName = roundName;
+            }
+          }
+        });
+      });
+
+      document.getElementById('bestStageResult').innerHTML = 
+        `<span class="highlight">${teamName}</span>'s best stage: <span class="highlight">${bestStageName}</span>`;
+    }
+
+    /**
+     * Filters out only the knockout rounds from the raw data.
+     */
+    async function loadKnockoutData() {
+      const data = await fetchWorldCupData();
+      if (!data) return;
+
+      const knockoutStages = [
+        "Round of 32", "Round of 16", "Quarter-finals", 
+        "Semi-finals", "Play-off for third place", "Final"
+      ];
+
+      // Filter rounds to only include knockout stages
+      const knockoutRounds = data.rounds.filter(round => 
+        knockoutStages.includes(round.name)
+      );
+
+      // Display the JSON output
+      document.getElementById('knockoutResult').textContent = JSON.stringify(knockoutRounds, null, 2);
+    }
+  </script>
+
+</body>
+</html>
