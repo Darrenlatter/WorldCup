@@ -696,9 +696,11 @@ function buildDistributionsString() {
 
 // ── LIVE FEED ──────────────────────────────────────────────────────────────
 async function fetchLiveWorldCupScores() {
-  setBannerState('loading', `<span class="live-pulse"></span> Fetching 2026 World Cup results from openfootball…`);
+  setBannerState('loading', `<span class="live-pulse"></span> Fetching 2026 World Cup results…`);
   try {
-    const response = await fetch(OPENFOOTBALL_URL);
+    // Using the faster-updating community mirror (same schema as openfootball)
+    const LIVE_DATA_URL = 'https://raw.githubusercontent.com/upbound-web/worldcup-live.json/master/2026/worldcup.json';
+    const response = await fetch(LIVE_DATA_URL);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
 
@@ -714,58 +716,56 @@ async function fetchLiveWorldCupScores() {
       "Final": "final"
     };
 
-    // OpenFootball wraps matches in a "rounds" array
-    (data.rounds || []).forEach(round => {
-      const koKey = koMapping[round.name];
+    // The 2026 schema uses a flat matches array
+    (data.matches || []).forEach((match, idx) => {
+      const koKey = koMapping[match.round];
 
-      (round.matches || []).forEach((match, idx) => {
-        // Name strings can occasionally be nested, this safely captures both openfootball schemas
-        const t1Raw = match.team1?.name || match.team1 || 'TBD';
-        const t2Raw = match.team2?.name || match.team2 || 'TBD';
-        
-        const home = normaliseName(t1Raw);
-        const away = normaliseName(t2Raw);
-        const key  = `${home}-${away}`;
-        const loc  = match.stadium ? match.stadium.name : (match.city || 'Location TBD');
+      // Name strings can occasionally be nested, this safely captures both openfootball schemas
+      const t1Raw = match.team1?.name || match.team1 || 'TBD';
+      const t2Raw = match.team2?.name || match.team2 || 'TBD';
+      
+      const home = normaliseName(t1Raw);
+      const away = normaliseName(t2Raw);
+      const key  = `${home}-${away}`;
+      const loc  = match.stadium ? match.stadium.name : (match.city || 'Location TBD');
 
-        let statusObj = {
-          homeScore: null, awayScore: null,
-          homePens: null, awayPens: null, penWinner: null,
-          status: 'upcoming',
+      let statusObj = {
+        homeScore: null, awayScore: null,
+        homePens: null, awayPens: null, penWinner: null,
+        status: 'upcoming',
+        matchDate: match.date || '',
+        matchTime: match.time || '',
+        location: loc
+      };
+
+      if (match.score && match.score.ft && match.score.ft.length === 2) {
+        statusObj.homeScore = match.score.ft[0];
+        statusObj.awayScore = match.score.ft[1];
+        statusObj.status    = 'completed';
+        if (match.score.ft[0] === match.score.ft[1] && match.score.p && match.score.p.length === 2) {
+          statusObj.homePens  = match.score.p[0];
+          statusObj.awayPens  = match.score.p[1];
+          statusObj.penWinner = match.score.p[0] > match.score.p[1] ? home : away;
+        }
+      } else if (match.score && match.score.ht) {
+        statusObj.homeScore = match.score.ht[0];
+        statusObj.awayScore = match.score.ht[1];
+        statusObj.status    = 'in_progress';
+      }
+      newCache[key] = statusObj;
+
+      // If this match belongs to a knockout round, slot it directly into our API KO object
+      if (koKey) {
+        apiKOs[koKey].push({
+          id: `${koKey}-${idx}`,
+          type: koKey,
+          home: home,
+          away: away,
           matchDate: match.date || '',
           matchTime: match.time || '',
           location: loc
-        };
-
-        if (match.score && match.score.ft && match.score.ft.length === 2) {
-          statusObj.homeScore = match.score.ft[0];
-          statusObj.awayScore = match.score.ft[1];
-          statusObj.status    = 'completed';
-          if (match.score.ft[0] === match.score.ft[1] && match.score.p && match.score.p.length === 2) {
-            statusObj.homePens  = match.score.p[0];
-            statusObj.awayPens  = match.score.p[1];
-            statusObj.penWinner = match.score.p[0] > match.score.p[1] ? home : away;
-          }
-        } else if (match.score && match.score.ht) {
-          statusObj.homeScore = match.score.ht[0];
-          statusObj.awayScore = match.score.ht[1];
-          statusObj.status    = 'in_progress';
-        }
-        newCache[key] = statusObj;
-
-        // If this match belongs to a knockout round, slot it directly into our API KO object
-        if (koKey) {
-          apiKOs[koKey].push({
-            id: `${koKey}-${idx}`,
-            type: koKey,
-            home: home,
-            away: away,
-            matchDate: match.date || '',
-            matchTime: match.time || '',
-            location: loc
-          });
-        }
-      });
+        });
+      }
     });
 
     // Directly overwrite state.koMatches with actual API matchups if they have populated
@@ -784,7 +784,6 @@ async function fetchLiveWorldCupScores() {
     const played = Object.values(liveScoresCache).filter(m => m.status !== 'upcoming').length;
     setBannerState('success',
       `✅ <strong>Data updated</strong> — ${played} match${played !== 1 ? 'es' : ''} with results. `
-      + `<span class="data-note">Source: <a href="https://github.com/openfootball/worldcup.json" target="_blank">openfootball/worldcup.json</a> (updated ~daily)</span>`
     );
 
     if (changed) processAndCalculateStandings();
@@ -803,16 +802,6 @@ async function fetchLiveWorldCupScores() {
     if (!Object.keys(liveScoresCache).length) mockLiveCalculationsPipeline();
   }
 }
-
-function mockLiveCalculationsPipeline() {
-  state.groupMatches.forEach(m => {
-    liveScoresCache[`${m.home}-${m.away}`] = {
-      homeScore: null, awayScore: null, homePens: null, awayPens: null, penWinner: null, status: 'upcoming'
-    };
-  });
-  processAndCalculateStandings();
-}
-
 // ── STANDINGS PIPELINE ────────────────────────────────────────────────────
 function processAndCalculateStandings() {
   const standings = {};
