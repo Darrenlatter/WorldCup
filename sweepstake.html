@@ -831,17 +831,17 @@ function processAndCalculateStandings() {
   const wc = (n) => wildcards[n]?.team || `3rd Spot ${n+1}`;
 
   const r32Layout = [
-    // -- TOP HALF OF BRACKET --
-    { home: winners['E'],  away: wc(0) },         // [0] M74
-    { home: winners['I'],  away: wc(1) },         // [1] M77
-    { home: runners['A'],  away: runners['B'] },  // [2] M73
-    { home: winners['F'],  away: runners['C'] },  // [3] M75
+    // -- TOP HALF OF BRACKET (QF 1 & QF 2) --
+    { home: runners['A'],  away: runners['B'] },  // [0] M73
+    { home: winners['F'],  away: runners['C'] },  // [1] M75
+    { home: winners['E'],  away: wc(0) },         // [2] M74
+    { home: winners['I'],  away: wc(1) },         // [3] M77
     { home: runners['K'],  away: runners['L'] },  // [4] M83
     { home: winners['H'],  away: runners['J'] },  // [5] M84
     { home: winners['D'],  away: wc(4) },         // [6] M81
     { home: winners['G'],  away: wc(5) },         // [7] M82
 
-    // -- BOTTOM HALF OF BRACKET --
+    // -- BOTTOM HALF OF BRACKET (QF 3 & QF 4) --
     { home: winners['C'],  away: runners['F'] },  // [8] M76
     { home: runners['E'],  away: runners['I'] },  // [9] M78
     { home: winners['A'],  away: wc(2) },         // [10] M79
