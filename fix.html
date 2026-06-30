@@ -225,7 +225,7 @@ tr.qualify-wildcard{ border-left: 4px solid var(--gold);      background-color: 
 .bracket-team-name span { word-break: break-word; }
 .bracket-team-owner { font-size: clamp(0.58rem, 1.5vw, 0.7rem); color: #718096; font-weight: normal; padding-left: 2px; }
 .bracket-score { font-weight: bold; min-width: 30px; text-align: center; font-size: clamp(0.82rem, 2.5vw, 0.95rem); color: var(--dark); flex-shrink: 0; }
-.pen-note     { text-align: center; font-size: 0.7rem; color: #718096; margin-top: 3px; }
+.pen-note      { text-align: center; font-size: 0.7rem; color: #718096; margin-top: 3px; }
 .pen-pill { display: inline-block; background: #ebf8ff; color: #2b6cb0; font-size: 0.65rem; font-weight: 700; padding: 1px 5px; border-radius: 8px; margin-left: 2px; white-space: nowrap; }
 
 /* ── STATUS BANNER ─────────────────────────────────────────── */
@@ -335,12 +335,12 @@ body.dark .bracket-team-owner { color: #94a3b8; }
 
 <div class="container">
   <div class="tabs" id="main-tabs-nav">
-    <button class="tab-btn setup-tab active" id="btn-tab-setup"       onclick="switchTab('setup')">Generator</button>
-    <button class="tab-btn"                   id="btn-tab-assignments"   onclick="switchTab('assignments')">Assignments</button>
-    <button class="tab-btn"                   id="btn-tab-playertable"   onclick="switchTab('playertable')">League Table</button>
-    <button class="tab-btn"                   id="btn-tab-groups"       onclick="switchTab('groups')">Groups</button>
-    <button class="tab-btn"                   id="btn-tab-fixtures"     onclick="switchTab('fixtures')">Fixtures</button>
-    <button class="tab-btn"                   id="btn-tab-bracket"      onclick="switchTab('bracket')">Knockout</button>
+    <button class="tab-btn setup-tab active" id="btn-tab-setup"        onclick="switchTab('setup')">Generator</button>
+    <button class="tab-btn"                  id="btn-tab-assignments"  onclick="switchTab('assignments')">Assignments</button>
+    <button class="tab-btn"                  id="btn-tab-playertable"  onclick="switchTab('playertable')">League Table</button>
+    <button class="tab-btn"                  id="btn-tab-groups"       onclick="switchTab('groups')">Groups</button>
+    <button class="tab-btn"                  id="btn-tab-fixtures"     onclick="switchTab('fixtures')">Fixtures</button>
+    <button class="tab-btn"                  id="btn-tab-bracket"      onclick="switchTab('bracket')">Knockout</button>
   </div>
 
   <div id="api-status-banner" class="status-banner">Verifying system initialization parameters…</div>
@@ -434,6 +434,7 @@ body.dark .bracket-team-owner { color: #94a3b8; }
 <script>
 // ── CONFIG ─────────────────────────────────────────────────────────────────
 const SWEEPSTAKE_DATA_URL = new URL('sweepstake.txt', document.baseURI).href;
+const OPENFOOTBALL_URL    = 'https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json';
 
 // ── NAME NORMALISATION ─────────────────────────────────────────────────────
 const TEAM_NAME_MAP = {
@@ -682,10 +683,10 @@ function buildDistributionsString() {
         state.groupMatches.push({ id:`G-${gl}-${i}-${j}`, group:gl, home:list[i], away:list[j] });
   });
 
-  state.koMatches.r32  = Array.from({length:16}, (_,i) => ({id:`R32-${i}`,   type:'r32',   home:'', away:''}));
-  state.koMatches.r16  = Array.from({length:8},  (_,i) => ({id:`R16-${i}`,   type:'r16',   home:'', away:''}));
-  state.koMatches.qf   = Array.from({length:4},  (_,i) => ({id:`QF-${i}`,    type:'qf',    home:'', away:''}));
-  state.koMatches.sf   = Array.from({length:2},  (_,i) => ({id:`SF-${i}`,    type:'sf',    home:'', away:''}));
+  state.koMatches.r32   = Array.from({length:16}, (_,i) => ({id:`R32-${i}`,   type:'r32',   home:'', away:''}));
+  state.koMatches.r16   = Array.from({length:8},  (_,i) => ({id:`R16-${i}`,   type:'r16',   home:'', away:''}));
+  state.koMatches.qf    = Array.from({length:4},  (_,i) => ({id:`QF-${i}`,    type:'qf',    home:'', away:''}));
+  state.koMatches.sf    = Array.from({length:2},  (_,i) => ({id:`SF-${i}`,    type:'sf',    home:'', away:''}));
   state.koMatches.final = [{id:'FINAL-0', type:'final', home:'', away:''}];
   state.isGenerated = true;
 
@@ -697,12 +698,26 @@ function buildDistributionsString() {
 async function fetchLiveWorldCupScores() {
   setBannerState('loading', `<span class="live-pulse"></span> Fetching 2026 World Cup results…`);
   try {
-    const LIVE_DATA_URL = 'https://raw.githubusercontent.com/upbound-web/worldcup-live.json/master/2026/worldcup.json';
-    const response = await fetch(LIVE_DATA_URL);
+    // FIX: use the actual openfootball source (was previously pointing at a
+    // non-existent "upbound-web/worldcup-live.json" mirror, which always
+    // failed and silently fell back to mock data — that's why penalty
+    // results were never showing up).
+    const response = await fetch(OPENFOOTBALL_URL + '?nocache=' + Date.now());
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
 
+    // openfootball's 2026 file may expose matches either as a flat
+    // `matches` array, or nested under `rounds[].matches`. Handle both so a
+    // schema variation doesn't silently produce an empty list.
+    let matchList = data.matches;
+    if (!matchList && Array.isArray(data.rounds)) {
+      matchList = data.rounds.flatMap(r => r.matches || []);
+    }
+    matchList = matchList || [];
+
     const newCache = {};
+
+    // Arrays to collect parsed Knockout Matches straight from the JSON feed
     const apiKOs = { r32: [], r16: [], qf: [], sf: [], final: [] };
     const koMapping = {
       "Round of 32": "r32",
@@ -712,15 +727,17 @@ async function fetchLiveWorldCupScores() {
       "Final": "final"
     };
 
-    (data.matches || []).forEach((match, idx) => {
+    matchList.forEach((match, idx) => {
       const koKey = koMapping[match.round];
+
+      // Name strings can occasionally be nested, this safely captures both openfootball schemas
       const t1Raw = match.team1?.name || match.team1 || 'TBD';
       const t2Raw = match.team2?.name || match.team2 || 'TBD';
-      
+
       const home = normaliseName(t1Raw);
       const away = normaliseName(t2Raw);
       const key  = `${home}-${away}`;
-      const loc  = match.stadium ? match.stadium.name : (match.city || 'Location TBD');
+      const loc  = match.stadium ? match.stadium.name : (match.ground || match.city || 'Location TBD');
 
       let statusObj = {
         homeScore: null, awayScore: null,
@@ -735,6 +752,9 @@ async function fetchLiveWorldCupScores() {
         statusObj.homeScore = match.score.ft[0];
         statusObj.awayScore = match.score.ft[1];
         statusObj.status    = 'completed';
+
+        // Draw after full time (and extra time, where applicable) — check
+        // for a penalty shootout result.
         if (match.score.ft[0] === match.score.ft[1] && match.score.p && match.score.p.length === 2) {
           statusObj.homePens  = match.score.p[0];
           statusObj.awayPens  = match.score.p[1];
@@ -747,6 +767,7 @@ async function fetchLiveWorldCupScores() {
       }
       newCache[key] = statusObj;
 
+      // If this match belongs to a knockout round, slot it directly into our API KO object
       if (koKey) {
         apiKOs[koKey].push({
           id: `${koKey}-${idx}`,
@@ -760,6 +781,7 @@ async function fetchLiveWorldCupScores() {
       }
     });
 
+    // Directly overwrite state.koMatches with actual API matchups if they have populated
     if (apiKOs.r32.length > 0) state.koMatches.r32 = apiKOs.r32;
     if (apiKOs.r16.length > 0) state.koMatches.r16 = apiKOs.r16;
     if (apiKOs.qf.length > 0)  state.koMatches.qf = apiKOs.qf;
@@ -773,12 +795,23 @@ async function fetchLiveWorldCupScores() {
     _fetchFailCount = 0;
 
     const played = Object.values(liveScoresCache).filter(m => m.status !== 'upcoming').length;
-    setBannerState('success', `✅ <strong>Data updated</strong> — ${played} match${played !== 1 ? 'es' : ''} with results. `);
+    setBannerState('success',
+      `✅ <strong>Data updated</strong> — ${played} match${played !== 1 ? 'es' : ''} with results. `
+    );
+
     if (changed) processAndCalculateStandings();
 
   } catch(error) {
-    console.warn('fetch failed:', error);
-    setBannerState('warning', `⚠️ <strong>Score feed unavailable.</strong>`);
+    console.warn('openfootball fetch failed:', error);
+    _fetchFailCount++;
+    setBannerState('warning',
+      `⚠️ <strong>Score feed unavailable.</strong> Displaying fixtures without results. `
+      + `Will retry in ${_fetchFailCount > 3 ? '15' : '5'} minutes.`
+    );
+    if (_fetchFailCount > 3) {
+      clearInterval(window._fetchInterval);
+      window._fetchInterval = setInterval(fetchLiveWorldCupScores, 900000);
+    }
   }
 }
 
@@ -793,10 +826,16 @@ function processAndCalculateStandings() {
 
   state.groupMatches.forEach(m => {
     const lookup = liveScoresCache[`${m.home}-${m.away}`] || liveScoresCache[`${m.away}-${m.home}`];
+    if (lookup) {
+      m.matchDate = lookup.matchDate;
+      m.matchTime = lookup.matchTime;
+      m.location  = lookup.location;
+    }
     if (lookup && lookup.homeScore !== null) {
-      const rev = !!liveScoresCache[`${m.away}-${m.home}`] && !liveScoresCache[`${m.home}-${m.away}`];
+      const rev   = !!liveScoresCache[`${m.away}-${m.home}`] && !liveScoresCache[`${m.home}-${m.away}`];
       m.homeScore = rev ? lookup.awayScore : lookup.homeScore;
       m.awayScore = rev ? lookup.homeScore : lookup.awayScore;
+      m.status    = lookup.status;
       const gl = standings[m.group];
       const h  = gl.find(t => t.team === m.home);
       const a  = gl.find(t => t.team === m.away);
@@ -805,14 +844,15 @@ function processAndCalculateStandings() {
       a.gf += m.awayScore; a.ga += m.homeScore; a.gd = a.gf - a.ga;
       h.p += (m.homeScore > m.awayScore ? 3 : m.homeScore === m.awayScore ? 1 : 0);
       a.p += (m.awayScore > m.homeScore ? 3 : m.homeScore === m.awayScore ? 1 : 0);
-      if (m.homeScore > m.awayScore) { h.w++; a.l++; }
+      if      (m.homeScore > m.awayScore) { h.w++; a.l++; }
       else if (m.awayScore > m.homeScore) { a.w++; h.l++; }
-      else { h.d++; a.d++; }
+      else                                { h.d++; a.d++; }
     }
   });
 
   Object.keys(standings).forEach(g => standings[g].sort((a,b) => b.p-a.p || b.gd-a.gd || b.gf-a.gf));
-  const thirds = Object.keys(standings).map(g => ({...standings[g][2], group:g}));
+
+  const thirds    = Object.keys(standings).map(g => ({...standings[g][2], group:g}));
   thirds.sort((a,b) => b.p-a.p || b.gd-a.gd || b.gf-a.gf);
   const wildcards = thirds.slice(0,8);
 
@@ -831,16 +871,26 @@ function processAndCalculateStandings() {
     if (grp[3]) mark(grp[3].team, 'red', 'out');
   });
 
+  // Calculate KO match results & Best Stage from the API-driven data
   ['r32','r16','qf','sf','final'].forEach(round => {
     state.koMatches[round].forEach(m => {
+      // Fetch score details from cache (if they exist)
       resolveKO(m);
-      if (m.home && !m.home.includes('TBD') && !m.home.includes('Spot')) window.teamBestRound[m.home] = round;
-      if (m.away && !m.away.includes('TBD') && !m.away.includes('Spot')) window.teamBestRound[m.away] = round;
+
+      // Best Stage Check: Merely appearing in the matchup gives them credit for that round
+      if (m.home && !m.home.includes('TBD') && !m.home.includes('Spot') && !m.home.includes('Winner')) {
+         window.teamBestRound[m.home] = round;
+      }
+      if (m.away && !m.away.includes('TBD') && !m.away.includes('Spot') && !m.away.includes('Winner')) {
+         window.teamBestRound[m.away] = round;
+      }
+
+      // If the match has been played, calculate progression/elimination
       if (m.homeScore != null && m.awayScore != null) {
         const winner = getWinner(m);
         const loser  = winner === m.home ? m.away : (winner === m.away ? m.home : null);
-        if (winner) { window.teamStatuses[winner] = 'green'; }
-        if (loser)  { window.teamStatuses[loser] = 'red'; window.teamBestRound[loser] = round + '_out'; }
+        if (winner) { window.teamStatuses[winner] = 'green'; } // Advance status
+        if (loser)  { window.teamStatuses[loser] = 'red'; window.teamBestRound[loser] = round + '_out'; } // Apply the "L"
       }
     });
   });
@@ -848,33 +898,45 @@ function processAndCalculateStandings() {
   const champ = state.koMatches.final.length > 0 ? getWinner(state.koMatches.final[0]) : null;
   if (champ) { window.teamStatuses[champ]='green'; window.teamBestRound[champ]='champion'; }
 
-  renderAssignmentsGridUI(); renderPlayerLeagueTableUI(standings); renderGroupTablesUI(standings, wildcards); renderFixturesUI(); renderBracketUI();
+  renderAssignmentsGridUI();
+  renderPlayerLeagueTableUI(standings);
+  renderGroupTablesUI(standings, wildcards);
+  renderFixturesUI();
+  renderBracketUI();
 }
 
-// ── RESOLUTION HELPERS ────────────────────────────────────────────────────
+// ── KO RESOLUTION ─────────────────────────────────────────────────────────
 function resolveKO(m) {
   if (!m.home || m.home.includes('Spot') || !m.away) return;
-  const lookup = liveScoresCache[`${m.home}-${m.away}`];
-  if (lookup && lookup.homeScore !== null) {
-    m.homeScore = lookup.homeScore;
-    m.awayScore = lookup.awayScore;
-    m.homePens  = lookup.homePens ?? null;
-    m.awayPens  = lookup.awayPens ?? null;
-    m.penWinner = lookup.penWinner ?? null;
-  }
+  const lookup = liveScoresCache[`${m.home}-${m.away}`] || liveScoresCache[`${m.away}-${m.home}`];
+  if (!lookup || lookup.homeScore === null) return;
+
+  // Lookup may be stored in reverse order to m.home/m.away — align it.
+  const rev = !liveScoresCache[`${m.home}-${m.away}`] && !!liveScoresCache[`${m.away}-${m.home}`];
+  m.homeScore = rev ? lookup.awayScore : lookup.homeScore;
+  m.awayScore = rev ? lookup.homeScore : lookup.awayScore;
+  m.homePens  = (rev ? lookup.awayPens : lookup.homePens) ?? null;
+  m.awayPens  = (rev ? lookup.homePens : lookup.awayPens) ?? null;
+  m.penWinner = lookup.penWinner ?? null;
+
+  if      (m.homeScore > m.awayScore) m.winner = m.home;
+  else if (m.awayScore > m.homeScore) m.winner = m.away;
+  else m.winner = m.penWinner || null;
 }
 
 function getWinner(m) {
   if (!m || m.homeScore == null || m.awayScore == null) return null;
   if (m.homeScore > m.awayScore) return m.home;
   if (m.awayScore > m.homeScore) return m.away;
-  return m.penWinner || null;
+  return m.winner || null;
 }
 
-// ── UI HELPERS ────────────────────────────────────────────────────────────
+// ── HELPERS ───────────────────────────────────────────────────────────────
 function getFlagImg(name) {
   const code = FLAG_CODES[name];
-  return code ? `<img src="https://flagcdn.com/w20/${code}.png" class="flag" alt="${escapeHTML(name)}">` : `<span class="flag" style="background:#cbd5e0"></span>`;
+  return code
+    ? `<img src="https://flagcdn.com/w20/${code}.png" class="flag" alt="${escapeHTML(name)}">`
+    : `<span class="flag" style="background:#cbd5e0"></span>`;
 }
 
 function escapeHTML(str) {
@@ -889,54 +951,74 @@ function switchTab(id) {
   document.getElementById(`btn-tab-${id}`).classList.add('active');
 }
 
+// ── KO PILL ───────────────────────────────────────────────────────────────
 function getKOPill(team) {
   const round = window.teamBestRound?.[team];
   if (!round) return '';
   const map = {
-    'champion': ['ko-pill-champion', '🏆 Champion'], 'final': ['ko-pill-final', 'Final'],
-    'sf': ['ko-pill-sf', 'Semi-Final'], 'qf': ['ko-pill-qf', 'Quarter-Final'],
-    'r16': ['ko-pill-r16', 'Round of 16'], 'r32': ['ko-pill-r32', 'Round of 32'],
-    'final_out': ['ko-pill-out', 'Final (L)'], 'sf_out': ['ko-pill-out', 'SF exit'],
-    'qf_out': ['ko-pill-out', 'QF exit'], 'r16_out': ['ko-pill-out', 'R16 exit'], 'r32_out': ['ko-pill-out', 'R32 exit']
+    'champion':  ['ko-pill-champion', '🏆 Champion'],
+    'final':     ['ko-pill-final',    'Final'],
+    'sf':        ['ko-pill-sf',       'Semi-Final'],
+    'qf':        ['ko-pill-qf',       'Quarter-Final'],
+    'r16':       ['ko-pill-r16',      'Round of 16'],
+    'r32':       ['ko-pill-r32',      'Round of 32'],
+    'final_out': ['ko-pill-out',      'Final (L)'],
+    'sf_out':    ['ko-pill-out',      'SF exit'],
+    'qf_out':    ['ko-pill-out',      'QF exit'],
+    'r16_out':   ['ko-pill-out',      'R16 exit'],
+    'r32_out':   ['ko-pill-out',      'R32 exit'],
   };
   const entry = map[round];
-  return entry ? `<span class="ko-pill ${entry[0]}">${entry[1]}</span>` : '';
+  if (!entry) return '';
+  return `<span class="ko-pill ${entry[0]}">${entry[1]}</span>`;
 }
 
-// ── RENDERERS ─────────────────────────────────────────────────────────────
+// ── PLAYER LEAGUE TABLE ───────────────────────────────────────────────────
 function computePlayerLeagueStandings(standings) {
   const teamRowByName = {};
   Object.values(standings).forEach(rows => rows.forEach(row => { teamRowByName[row.team] = row; }));
+
   const byPlayer = {};
-  state.players.forEach(p => { byPlayer[p] = { player:p, teams:[], p:0, w:0, d:0, l:0, gf:0, ga:0, gd:0, pts:0 }; });
+  state.players.forEach(p => {
+    byPlayer[p] = { player:p, teams:[], p:0, w:0, d:0, l:0, gf:0, ga:0, gd:0, pts:0 };
+  });
 
   Object.keys(state.assignments).forEach(team => {
     const player = state.assignments[team];
     if (!byPlayer[player]) return;
     const row = teamRowByName[team];
     if (!row) return;
-    const agg = byPlayer[player];
+    const agg   = byPlayer[player];
     agg.teams.push(team);
-    agg.p += row.w + row.d + row.l;
-    agg.w += row.w; agg.d += row.d; agg.l += row.l;
-    agg.gf += row.gf; agg.ga += row.ga;
+    agg.p   += row.w + row.d + row.l;
+    agg.w   += row.w; agg.d += row.d; agg.l += row.l;
+    agg.gf  += row.gf; agg.ga += row.ga;
     agg.pts += row.p;
   });
 
   ['r32','r16','qf','sf','final'].forEach(round => {
     state.koMatches[round].forEach(m => {
       if (m.homeScore == null || m.awayScore == null) return;
-      const winner = getWinner(m);
       [
         { team: m.home, gf: m.homeScore, ga: m.awayScore },
         { team: m.away, gf: m.awayScore, ga: m.homeScore },
       ].forEach(({ team, gf, ga }) => {
         const player = state.assignments[team];
+        // Gracefully ignore placeholder teams generated in json before tournament completes
         if (!player || !byPlayer[player]) return;
         const agg = byPlayer[player];
-        agg.p += 1; agg.gf += gf; agg.ga += ga;
-        if (winner === team) { agg.w++; agg.pts += 3; }
-        else { agg.l++; }
+        agg.p  += 1;
+        agg.gf += gf;
+        agg.ga += ga;
+        if (gf > ga) {
+          agg.w++; agg.pts += 3;
+        } else if (gf === ga) {
+          const winner = getWinner(m);
+          if (winner === team) { agg.w++; agg.pts += 3; }
+          else                 { agg.l++; }
+        } else {
+          agg.l++;
+        }
       });
     });
   });
@@ -949,12 +1031,221 @@ function renderPlayerLeagueTableUI(standings) {
   const tbody = document.getElementById('player-league-rows');
   if (!tbody) return;
   const rows = computePlayerLeagueStandings(standings);
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;color:#a0aec0;padding:20px;">No participants yet.</td></tr>`;
+    return;
+  }
+
+  const roundOrder = ['champion','final','sf','qf','r16','r32','group_q','group_wc','out',''];
+
   tbody.innerHTML = rows.map((r, idx) => {
-    const flags = r.teams.map(t => getFlagImg(t)).join('');
-    return `<tr><td class="rank-cell${idx===0?' rank-1':''}">${idx+1}</td><td><div class="player-cell-name">${escapeHTML(r.player)}</div><div class="player-cell-teams">${flags}</div></td><td>${r.teams.map(escapeHTML).join(', ')||'—'}</td><td>${r.p}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td><td>${r.gf}</td><td>${r.ga}</td><td>${r.gd}</td><td class="pts-cell">${r.pts}</td><td>${getKOPill(r.teams[0])}</td></tr>`;
+    const flags = r.teams.length
+      ? r.teams.map(t => getFlagImg(t)).join('')
+      : '<span style="color:#a0aec0;font-size:0.78rem;">none</span>';
+
+    let bestRound = '';
+    r.teams.forEach(t => {
+      const tr    = window.teamBestRound?.[t] || '';
+      const trB   = tr.replace('_out','');
+      const brB   = bestRound.replace('_out','');
+      if (roundOrder.indexOf(trB) < roundOrder.indexOf(brB) || bestRound === '') bestRound = tr;
+    });
+    const pillTeam = r.teams.find(t => (window.teamBestRound?.[t]||'') === bestRound) || r.teams[0];
+    const pill     = getKOPill(pillTeam);
+
+    return `<tr>
+      <td class="rank-cell${idx===0?' rank-1':''}">${idx+1}</td>
+      <td><div class="player-cell-name">${escapeHTML(r.player)}</div><div class="player-cell-teams">${flags}</div></td>
+      <td style="font-size:0.76rem;color:#718096;">${r.teams.map(escapeHTML).join(', ')||'—'}</td>
+      <td>${r.p}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
+      <td>${r.gf}</td><td>${r.ga}</td>
+      <td>${r.gd>0?'+'+r.gd:r.gd}</td>
+      <td class="pts-cell">${r.pts}</td>
+      <td>${pill}</td>
+    </tr>`;
   }).join('');
 }
 
+// ── GROUP TABLES ──────────────────────────────────────────────────────────
+function renderGroupTablesUI(standings, wildcards) {
+  const container = document.getElementById('groups-tables-ui');
+  container.innerHTML = '';
+  Object.keys(standings).forEach(g => {
+    const card = document.createElement('div'); card.className = 'card group-container';
+    let html = `<h2>Group ${g}</h2><table><thead><tr><th>Team</th><th>GD</th><th>Pts</th></tr></thead><tbody>`;
+    standings[g].forEach((row, idx) => {
+      const rCls = idx < 2 ? 'qualify-direct' : (wildcards.some(w => w.team===row.team && w.p>0) ? 'qualify-wildcard' : '');
+      html += `<tr class="${rCls}"><td>
+        <div class="team-cell">${getFlagImg(row.team)}<div>
+          <strong>${escapeHTML(row.team)}</strong><br>
+          <small style="color:#718096">(${escapeHTML(row.player)})</small>
+        </div></div></td>
+        <td>${row.gd>0?'+'+row.gd:row.gd}</td>
+        <td><strong>${row.p}</strong></td></tr>`;
+    });
+    card.innerHTML = html + '</tbody></table>';
+    container.appendChild(card);
+  });
+}
+
+// ── FIXTURES ──────────────────────────────────────────────────────────────
+function renderFixturesUI() {
+  const container = document.getElementById('group-fixtures-ui');
+  container.innerHTML = '';
+
+  let currentGroup = '', currentDate = '';
+  state.groupMatches.forEach(m => {
+    if (m.group !== currentGroup) {
+      currentGroup = m.group; currentDate = '';
+      const h = document.createElement('h3');
+      h.className = 'fixture-section-header';
+      h.textContent = `Group ${currentGroup}`;
+      container.appendChild(h);
+    }
+
+    const dateKey = m.matchDate || '';
+    if (dateKey && dateKey !== currentDate) {
+      currentDate = dateKey;
+      let label = dateKey;
+      try { label = new Date(dateKey).toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }); } catch(e) {}
+      const dh = document.createElement('div');
+      dh.className = 'fixture-date-header';
+      dh.textContent = label;
+      container.appendChild(dh);
+    }
+
+    container.appendChild(buildMatchRow(m, false));
+  });
+
+  const koRounds = [
+    { key:'r32',   label:'Round of 32' },
+    { key:'r16',   label:'Round of 16' },
+    { key:'qf',    label:'Quarter-Finals' },
+    { key:'sf',    label:'Semi-Finals' },
+    { key:'final', label:'Grand Final' },
+  ];
+
+  let hasAnyKO = false;
+  koRounds.forEach(({ key, label }) => {
+    const played = state.koMatches[key].filter(m => m.homeScore != null);
+    if (!played.length) return;
+    if (!hasAnyKO) {
+      hasAnyKO = true;
+      const div = document.createElement('div');
+      div.style.cssText = 'margin:24px 0 8px;border-top:2px solid var(--border);padding-top:16px;';
+      div.innerHTML = `<h3 class="fixture-section-header" style="margin:0;">Knockout Stage</h3>`;
+      container.appendChild(div);
+    }
+    const h = document.createElement('h3');
+    h.className = 'fixture-section-header';
+    h.style.fontSize = '0.95rem';
+    h.textContent = label;
+    container.appendChild(h);
+    state.koMatches[key].forEach(m => {
+      if (m.home && m.homeScore != null) container.appendChild(buildMatchRow(m, true));
+    });
+  });
+}
+
+function buildMatchRow(m, isKO) {
+  const isLive      = m.status === 'in_progress';
+  const isCompleted = m.status === 'completed';
+  const row         = document.createElement('div');
+  row.className     = 'match-row';
+
+  if (isLive)      row.style.borderColor = 'var(--secondary)';
+  if (isCompleted) row.style.backgroundColor = 'var(--status-green-bg)';
+
+  const hScore = m.homeScore != null ? m.homeScore : '–';
+  const aScore = m.awayScore != null ? m.awayScore : '–';
+
+  let penLine = '';
+  if (isKO && m.homePens != null && m.awayPens != null) {
+    penLine = `<div class="pen-line">(${m.homePens} – ${m.awayPens} pens)</div>`;
+  }
+
+  let dateDisplay = '';
+  if (m.matchDate) {
+    try { dateDisplay = new Date(m.matchDate).toLocaleDateString('en-GB', { day:'numeric', month:'short' }); } catch(e) { dateDisplay = m.matchDate; }
+  }
+  const timeDisplay = m.matchTime || '';
+
+  const statusLabel = isLive
+    ? `<span style="color:var(--secondary);font-size:0.68rem;font-weight:bold;">● LIVE</span>`
+    : isCompleted
+    ? `<span style="font-size:0.63rem;color:#718096;">FT</span>`
+    : `<span style="font-size:0.63rem;color:#a0aec0;">${escapeHTML(dateDisplay)}${timeDisplay ? ' '+escapeHTML(timeDisplay) : ''}</span>`;
+
+  row.innerHTML = `
+    <div class="match-team home">
+      <span>${escapeHTML(m.home)}<br><small style="font-weight:normal;color:#718096">(${escapeHTML(state.assignments[m.home]||'')})</small></span>
+      ${getFlagImg(m.home)}
+    </div>
+    <div class="match-centre">
+      <div class="score-line">${hScore} <span style="font-size:0.65rem;color:#a0aec0">v</span> ${aScore}</div>
+      ${penLine}
+      <div style="margin-top:3px;">${statusLabel}</div>
+    </div>
+    <div class="match-team away">
+      ${getFlagImg(m.away)}
+      <span>${escapeHTML(m.away)}<br><small style="font-weight:normal;color:#718096">(${escapeHTML(state.assignments[m.away]||'')})</small></span>
+    </div>`;
+  return row;
+}
+
+// ── BRACKET ───────────────────────────────────────────────────────────────
+function renderBracketUI() {
+  const container = document.getElementById('bracket-tree-ui');
+  container.innerHTML = '';
+  const rounds = [
+    {key:'r32',title:'Round of 32'},{key:'r16',title:'Round of 16'},
+    {key:'qf',title:'Quarter-Finals'},{key:'sf',title:'Semi-Finals'},{key:'final',title:'Final'}
+  ];
+  rounds.forEach(r => {
+    const col = document.createElement('div'); col.className = 'bracket-round';
+    col.innerHTML = `<div class="bracket-round-title">${r.title}</div>`;
+    state.koMatches[r.key].forEach(m => {
+      const card = document.createElement('div');
+      card.className = 'match-row bracket-match';
+
+      const hOwner = state.assignments[m.home] ? escapeHTML(state.assignments[m.home]) : '';
+      const aOwner = state.assignments[m.away] ? escapeHTML(state.assignments[m.away]) : '';
+      const hs  = m.homeScore != null ? m.homeScore : '';
+      const as_ = m.awayScore != null ? m.awayScore : '';
+
+      // PENALTY: pen score pills
+      let hPenPill = '', aPenPill = '';
+      if (m.homePens != null && m.awayPens != null) {
+        hPenPill = m.penWinner === m.home
+          ? `<span class="pen-pill">${m.homePens}p &#10003;</span>`
+          : `<span class="pen-pill" style="opacity:0.5;">${m.homePens}p</span>`;
+        aPenPill = m.penWinner === m.away
+          ? `<span class="pen-pill">${m.awayPens}p &#10003;</span>`
+          : `<span class="pen-pill" style="opacity:0.5;">${m.awayPens}p</span>`;
+      }
+
+      // Layout: home team block | score | away team block
+      // Each team block: flag + name on one line, owner on the line below
+      card.innerHTML = `
+        <div style="display:flex;align-items:center;gap:4px;width:100%;">
+          <div class="bracket-team">
+            <div class="bracket-team-name">${getFlagImg(m.home)}<span>${escapeHTML(m.home)}</span>${hPenPill}</div>
+            ${hOwner ? `<div class="bracket-team-owner">${hOwner}</div>` : ''}
+          </div>
+          <div class="bracket-score">${hs}${hs !== '' && as_ !== '' ? ' : ' : ''}${as_}</div>
+          <div class="bracket-team" style="align-items:flex-end;">
+            <div class="bracket-team-name" style="justify-content:flex-end;">${aPenPill}<span>${escapeHTML(m.away)}</span>${getFlagImg(m.away)}</div>
+            ${aOwner ? `<div class="bracket-team-owner" style="text-align:right;">${aOwner}</div>` : ''}
+          </div>
+        </div>`;
+      col.appendChild(card);
+    });
+    container.appendChild(col);
+  });
+}
+
+// ── ASSIGNMENTS GRID ──────────────────────────────────────────────────────
 function renderAssignmentsGridUI() {
   const container = document.getElementById('pool-assignments-ui');
   container.innerHTML = '';
@@ -964,59 +1255,40 @@ function renderAssignmentsGridUI() {
 
   Object.keys(inverted).forEach(player => {
     const card = document.createElement('div'); card.className = 'card';
-    card.innerHTML = `<h3>${escapeHTML(player)}</h3><div style="display:flex;flex-direction:column;gap:7px;">${inverted[player].map(t => `<div class="team-badge status-${window.teamStatuses?.[t] || 'none'}">${getFlagImg(t)} ${escapeHTML(t)} ${getKOPill(t)}</div>`).join('')}</div>`;
+    card.style.cssText = 'display:flex;flex-direction:column;gap:10px;';
+    const badges = inverted[player].map(t => {
+      const src    = state.assignmentSource?.[t];
+      const badge  = src==='manual' ? `<span class="badge-manual">📌 Manual</span>` : `<span class="badge-random">🎲 Random</span>`;
+      const status = window.teamStatuses?.[t] || 'none';
+      const pill   = getKOPill(t);
+      return `<div class="team-badge status-${status}">${getFlagImg(t)} <strong>${escapeHTML(t)}</strong>${badge}${pill}</div>`;
+    }).join('');
+    card.innerHTML = `
+      <div>
+        <span style="font-size:0.76rem;text-transform:uppercase;color:#718096;font-weight:bold;letter-spacing:0.04em;">Participant</span>
+        <h3 style="font-size:clamp(1.1rem,4vw,1.4rem);color:var(--dark);margin-top:2px;">${escapeHTML(player)}</h3>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:7px;">${badges||'<span style="color:#a0aec0;font-size:0.88rem;">No assignments</span>'}</div>`;
     container.appendChild(card);
   });
 }
 
-function renderGroupTablesUI(standings, wildcards) {
-  const container = document.getElementById('groups-tables-ui');
-  container.innerHTML = '';
-  Object.keys(standings).forEach(g => {
-    const card = document.createElement('div'); card.className = 'card group-container';
-    card.innerHTML = `<h2>Group ${g}</h2><table><thead><tr><th>Team</th><th>GD</th><th>Pts</th></tr></thead><tbody>${standings[g].map((row, idx) => `<tr class="${idx < 2 ? 'qualify-direct' : (wildcards.some(w => w.team===row.team) ? 'qualify-wildcard' : '')}"><td>${getFlagImg(row.team)} ${escapeHTML(row.team)}</td><td>${row.gd}</td><td>${row.p}</td></tr>`).join('')}</tbody></table>`;
-    container.appendChild(card);
-  });
-}
-
-function renderFixturesUI() {
-  const container = document.getElementById('group-fixtures-ui');
-  container.innerHTML = '';
-  state.groupMatches.forEach(m => container.appendChild(buildMatchRow(m, false)));
-}
-
-function buildMatchRow(m, isKO) {
-  const row = document.createElement('div');
-  row.className = 'match-row';
-  row.innerHTML = `
-    <div class="match-team home">${m.home} ${getFlagImg(m.home)}</div>
-    <div class="match-centre"><div>${m.homeScore ?? '–'} v ${m.awayScore ?? '–'}</div>${m.homePens != null ? `<div class="pen-line">(${m.homePens}-${m.awayPens} pens)</div>` : ''}</div>
-    <div class="match-team away">${getFlagImg(m.away)} ${m.away}</div>`;
-  return row;
-}
-
-function renderBracketUI() {
-  const container = document.getElementById('bracket-tree-ui');
-  container.innerHTML = '';
-  ['r32','r16','qf','sf','final'].forEach(r => {
-    const col = document.createElement('div'); col.className = 'bracket-round';
-    col.innerHTML = `<div class="bracket-round-title">${r}</div>`;
-    state.koMatches[r].forEach(m => {
-      const card = document.createElement('div');
-      card.className = 'match-row bracket-match';
-      card.innerHTML = `<div class="bracket-team">${m.home} ${m.homeScore ?? ''}</div><div class="bracket-team" style="align-items:flex-end;">${m.away} ${m.awayScore ?? ''}</div>`;
-      col.appendChild(card);
-    });
-    container.appendChild(col);
-  });
-}
-
+// ── DARK MODE ─────────────────────────────────────────────────────────────
 function toggleDarkMode() {
   document.body.classList.toggle('dark');
   const isDark = document.body.classList.contains('dark');
   localStorage.setItem('theme', isDark ? 'dark' : 'light');
   document.getElementById('theme-toggle').innerText = isDark ? '☀️ Light Mode' : '🌙 Dark Mode';
 }
+
+(function () {
+  const saved = localStorage.getItem('theme');
+  if (saved === 'dark') {
+    document.body.classList.add('dark');
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.innerText = '☀️ Light Mode';
+  }
+})();
 </script>
 </body>
 </html>
