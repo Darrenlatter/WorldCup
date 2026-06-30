@@ -1094,12 +1094,49 @@ function renderFixturesUI() {
   const container = document.getElementById('group-fixtures-ui');
   container.innerHTML = '';
 
+  const koRounds = [
+    { key:'r32',   label:'Round of 32' },
+    { key:'r16',   label:'Round of 16' },
+    { key:'qf',    label:'Quarter-Finals' },
+    { key:'sf',    label:'Semi-Finals' },
+    { key:'final', label:'Grand Final' },
+  ];
+
+  let hasAnyKO = false;
+  koRounds.forEach(({ key, label }) => {
+    const played = state.koMatches[key].filter(m => m.homeScore != null);
+    if (!played.length) return;
+    if (!hasAnyKO) {
+      hasAnyKO = true;
+      const div = document.createElement('div');
+      div.style.cssText = 'margin-bottom:8px;';
+      div.innerHTML = `<h3 class="fixture-section-header" style="margin-top:0;">Knockout Stage</h3>`;
+      container.appendChild(div);
+    }
+    const h = document.createElement('h3');
+    h.className = 'fixture-section-header';
+    h.style.fontSize = '0.95rem';
+    h.textContent = label;
+    container.appendChild(h);
+    state.koMatches[key].forEach(m => {
+      if (m.home && m.homeScore != null) container.appendChild(buildMatchRow(m, true));
+    });
+  });
+
+  if (hasAnyKO) {
+    const div = document.createElement('div');
+    div.style.cssText = 'margin:24px 0 8px;border-top:2px solid var(--border);padding-top:16px;';
+    div.innerHTML = `<h3 class="fixture-section-header" style="margin:0;">Group Stage</h3>`;
+    container.appendChild(div);
+  }
+
   let currentGroup = '', currentDate = '';
   state.groupMatches.forEach(m => {
     if (m.group !== currentGroup) {
       currentGroup = m.group; currentDate = '';
       const h = document.createElement('h3');
       h.className = 'fixture-section-header';
+      h.style.fontSize = '0.95rem';
       h.textContent = `Group ${currentGroup}`;
       container.appendChild(h);
     }
@@ -1116,35 +1153,6 @@ function renderFixturesUI() {
     }
 
     container.appendChild(buildMatchRow(m, false));
-  });
-
-  const koRounds = [
-    { key:'r32',   label:'Round of 32' },
-    { key:'r16',   label:'Round of 16' },
-    { key:'qf',    label:'Quarter-Finals' },
-    { key:'sf',    label:'Semi-Finals' },
-    { key:'final', label:'Grand Final' },
-  ];
-
-  let hasAnyKO = false;
-  koRounds.forEach(({ key, label }) => {
-    const played = state.koMatches[key].filter(m => m.homeScore != null);
-    if (!played.length) return;
-    if (!hasAnyKO) {
-      hasAnyKO = true;
-      const div = document.createElement('div');
-      div.style.cssText = 'margin:24px 0 8px;border-top:2px solid var(--border);padding-top:16px;';
-      div.innerHTML = `<h3 class="fixture-section-header" style="margin:0;">Knockout Stage</h3>`;
-      container.appendChild(div);
-    }
-    const h = document.createElement('h3');
-    h.className = 'fixture-section-header';
-    h.style.fontSize = '0.95rem';
-    h.textContent = label;
-    container.appendChild(h);
-    state.koMatches[key].forEach(m => {
-      if (m.home && m.homeScore != null) container.appendChild(buildMatchRow(m, true));
-    });
   });
 }
 
