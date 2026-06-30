@@ -186,14 +186,13 @@ tr.qualify-wildcard{ border-left: 4px solid var(--gold);      background-color: 
   font-size: clamp(0.72rem, 2.2vw, 0.9rem);
   font-weight: 600;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 5px;
   overflow: hidden;
 }
 .match-team.home { justify-content: flex-end; text-align: right; }
 .match-team.away { justify-content: flex-start; text-align: left; }
-.match-team .flag { margin-top: 0.3em; }
-.match-team span { overflow: hidden; word-break: break-word; line-height: 1.3; }
+.match-team span { overflow: hidden; word-break: break-word; }
 .match-centre {
   width: 26%;
   display: flex;
@@ -201,66 +200,45 @@ tr.qualify-wildcard{ border-left: 4px solid var(--gold);      background-color: 
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  gap: 5px;
 }
 .score-line { font-weight: bold; font-size: clamp(0.9rem, 3vw, 1.1rem); color: var(--dark); display: flex; gap: 8px; align-items: center; }
-.score-pill {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--th-bg);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 5px 13px;
-  font-weight: 800;
-  font-size: clamp(0.92rem, 3vw, 1.15rem);
-  color: var(--dark);
-}
-.score-pill.is-completed { background: var(--status-green-bg); border-color: var(--status-green-border); }
-.score-pill.is-live { background: var(--status-green-bg); border-color: var(--secondary); animation: scorePulse 1.8s infinite; }
-.score-pill .vs-sep { font-size: 0.6em; font-weight: 600; color: #a0aec0; }
-@keyframes scorePulse { 0%{box-shadow:0 0 0 0 rgba(7,128,69,0.35);} 70%{box-shadow:0 0 0 6px rgba(7,128,69,0);} 100%{box-shadow:0 0 0 0 rgba(7,128,69,0);} }
-.pen-line   { font-size: clamp(0.62rem, 1.8vw, 0.72rem); color: #718096; margin-top: 3px; }
-.match-status-badge { font-size: 0.62rem; font-weight: 700; padding: 2px 9px; border-radius: 10px; margin-top: 4px; letter-spacing: 0.03em; }
-.match-status-badge.status-live      { background: var(--status-green-bg); color: var(--secondary); }
-.match-status-badge.status-ft        { background: #edf2f7; color: #4a5568; }
-.match-status-badge.status-upcoming  { background: transparent; color: #a0aec0; font-weight: 600; }
-.owner-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: #2b6cb0;
-  background: #ebf8ff;
-  padding: 1px 8px;
-  border-radius: 9px;
-  margin-top: 3px;
-}
+.pen-line   { font-size: clamp(0.62rem, 1.8vw, 0.72rem); color: #718096; margin-top: 1px; }
 
 /* ── BRACKET ───────────────────────────────────────────────── */
 .bracket-wrapper { display: flex; gap: 12px; overflow-x: auto; padding: 10px 0 16px; -webkit-overflow-scrolling: touch; }
 .bracket-round { min-width: clamp(150px, 42vw, 260px); display: flex; flex-direction: column; justify-content: space-around; gap: 10px; }
 .bracket-round-title { font-weight: bold; text-align: center; padding-bottom: 8px; border-bottom: 2px solid var(--primary); color: var(--dark); font-size: clamp(0.72rem,2.2vw,0.95rem); margin-bottom: 8px; }
-.bracket-match { flex-direction: column; padding: 8px 6px; }
-.bracket-team {
-  font-size: clamp(0.68rem, 1.9vw, 0.82rem);
-  font-weight: bold;
+.bracket-match { flex-direction: column; padding: 10px 12px; gap: 8px; }
+.bracket-team-row {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  color: var(--dark);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
 }
-.bracket-team-name  { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; line-height: 1.3; }
-.bracket-team-name span { word-break: break-word; }
-.bracket-team-owner { font-size: clamp(0.58rem, 1.5vw, 0.7rem); color: #718096; font-weight: normal; padding-left: 2px; }
-.bracket-score { font-weight: bold; min-width: 30px; text-align: center; font-size: clamp(0.82rem, 2.5vw, 0.95rem); color: var(--dark); flex-shrink: 0; }
+.bracket-team-row + .bracket-team-row { padding-top: 8px; border-top: 1px solid var(--border); }
+.bracket-team-info { display: flex; align-items: center; gap: 7px; min-width: 0; flex: 1; }
+.bracket-team-name {
+  font-size: clamp(0.74rem, 2vw, 0.88rem);
+  font-weight: 700;
+  color: var(--dark);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bracket-team-row.winner .bracket-team-name { color: var(--status-green-border); }
+.bracket-score {
+  font-weight: 800;
+  min-width: 18px;
+  text-align: right;
+  font-size: clamp(0.85rem, 2.3vw, 1rem);
+  color: var(--primary);
+  flex-shrink: 0;
+}
+.bracket-team-row.winner .bracket-score { color: var(--status-green-border); }
+.bracket-team-owner { font-size: clamp(0.58rem, 1.5vw, 0.68rem); color: #718096; font-weight: normal; margin-left: 4px; }
 .pen-note      { text-align: center; font-size: 0.7rem; color: #718096; margin-top: 3px; }
-.pen-pill { display: inline-block; background: #ebf8ff; color: #2b6cb0; font-size: 0.65rem; font-weight: 700; padding: 1px 5px; border-radius: 8px; margin-left: 2px; white-space: nowrap; }
+.pen-pill { display: inline-block; background: #ebf8ff; color: #2b6cb0; font-size: 0.62rem; font-weight: 700; padding: 1px 5px; border-radius: 8px; margin-left: 4px; white-space: nowrap; }
 
 /* ── STATUS BANNER ─────────────────────────────────────────── */
 .status-banner { padding: 13px 15px; border-radius: 8px; background-color: #ebf8ff; color: #2b6cb0; font-size: clamp(0.78rem, 2.5vw, 0.9rem); margin-bottom: 16px; font-weight: 500; border-left: 4px solid #3182ce; line-height: 1.4; }
@@ -345,16 +323,13 @@ body.dark .assign-summary { background: #0f172a; }
 body.dark .match-row { background: var(--card-bg); border-color: var(--border); }
 body.dark .pen-pill  { background: #1e3a5f; color: #90cdf4; }
 body.dark .pen-line  { color: #a0aec0; }
-body.dark .score-pill { background: var(--th-bg); border-color: var(--border); }
-body.dark .score-pill.is-completed { background: var(--status-green-bg); border-color: var(--status-green-border); }
-body.dark .match-status-badge.status-ft { background: #2d3748; color: #cbd5e0; }
-body.dark .owner-tag { background: #1e3a5f; color: #90cdf4; }
 body.dark .pen-note  { color: #a0aec0; }
 body.dark .tab-btn:hover { background-color: #2d3748; color: #edf2f7; }
 body.dark .tab-btn.setup-tab { border-color: var(--gold); color: var(--gold); }
 body.dark th { color: #a0aec0; }
 body.dark small { color: #94a3b8; }
 body.dark .bracket-team-owner { color: #94a3b8; }
+body.dark .bracket-team-row + .bracket-team-row { border-top-color: var(--border); }
 </style>
 </head>
 <body>
@@ -736,17 +711,10 @@ function buildDistributionsString() {
 async function fetchLiveWorldCupScores() {
   setBannerState('loading', `<span class="live-pulse"></span> Fetching 2026 World Cup results…`);
   try {
-    // FIX: use the actual openfootball source (was previously pointing at a
-    // non-existent "upbound-web/worldcup-live.json" mirror, which always
-    // failed and silently fell back to mock data — that's why penalty
-    // results were never showing up).
     const response = await fetch(OPENFOOTBALL_URL + '?nocache=' + Date.now());
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
 
-    // openfootball's 2026 file may expose matches either as a flat
-    // `matches` array, or nested under `rounds[].matches`. Handle both so a
-    // schema variation doesn't silently produce an empty list.
     let matchList = data.matches;
     if (!matchList && Array.isArray(data.rounds)) {
       matchList = data.rounds.flatMap(r => r.matches || []);
@@ -755,7 +723,6 @@ async function fetchLiveWorldCupScores() {
 
     const newCache = {};
 
-    // Arrays to collect parsed Knockout Matches straight from the JSON feed
     const apiKOs = { r32: [], r16: [], qf: [], sf: [], final: [] };
     const koMapping = {
       "Round of 32": "r32",
@@ -768,7 +735,6 @@ async function fetchLiveWorldCupScores() {
     matchList.forEach((match, idx) => {
       const koKey = koMapping[match.round];
 
-      // Name strings can occasionally be nested, this safely captures both openfootball schemas
       const t1Raw = match.team1?.name || match.team1 || 'TBD';
       const t2Raw = match.team2?.name || match.team2 || 'TBD';
 
@@ -791,8 +757,6 @@ async function fetchLiveWorldCupScores() {
         statusObj.awayScore = match.score.ft[1];
         statusObj.status    = 'completed';
 
-        // Draw after full time (and extra time, where applicable) — check
-        // for a penalty shootout result.
         if (match.score.ft[0] === match.score.ft[1] && match.score.p && match.score.p.length === 2) {
           statusObj.homePens  = match.score.p[0];
           statusObj.awayPens  = match.score.p[1];
@@ -805,7 +769,6 @@ async function fetchLiveWorldCupScores() {
       }
       newCache[key] = statusObj;
 
-      // If this match belongs to a knockout round, slot it directly into our API KO object
       if (koKey) {
         apiKOs[koKey].push({
           id: `${koKey}-${idx}`,
@@ -819,7 +782,6 @@ async function fetchLiveWorldCupScores() {
       }
     });
 
-    // Directly overwrite state.koMatches with actual API matchups if they have populated
     if (apiKOs.r32.length > 0) state.koMatches.r32 = apiKOs.r32;
     if (apiKOs.r16.length > 0) state.koMatches.r16 = apiKOs.r16;
     if (apiKOs.qf.length > 0)  state.koMatches.qf = apiKOs.qf;
@@ -909,13 +871,10 @@ function processAndCalculateStandings() {
     if (grp[3]) mark(grp[3].team, 'red', 'out');
   });
 
-  // Calculate KO match results & Best Stage from the API-driven data
   ['r32','r16','qf','sf','final'].forEach(round => {
     state.koMatches[round].forEach(m => {
-      // Fetch score details from cache (if they exist)
       resolveKO(m);
 
-      // Best Stage Check: Merely appearing in the matchup gives them credit for that round
       if (m.home && !m.home.includes('TBD') && !m.home.includes('Spot') && !m.home.includes('Winner')) {
          window.teamBestRound[m.home] = round;
       }
@@ -923,12 +882,11 @@ function processAndCalculateStandings() {
          window.teamBestRound[m.away] = round;
       }
 
-      // If the match has been played, calculate progression/elimination
       if (m.homeScore != null && m.awayScore != null) {
         const winner = getWinner(m);
         const loser  = winner === m.home ? m.away : (winner === m.away ? m.home : null);
-        if (winner) { window.teamStatuses[winner] = 'green'; } // Advance status
-        if (loser)  { window.teamStatuses[loser] = 'red'; window.teamBestRound[loser] = round + '_out'; } // Apply the "L"
+        if (winner) { window.teamStatuses[winner] = 'green'; }
+        if (loser)  { window.teamStatuses[loser] = 'red'; window.teamBestRound[loser] = round + '_out'; }
       }
     });
   });
@@ -949,7 +907,6 @@ function resolveKO(m) {
   const lookup = liveScoresCache[`${m.home}-${m.away}`] || liveScoresCache[`${m.away}-${m.home}`];
   if (!lookup || lookup.homeScore === null) return;
 
-  // Lookup may be stored in reverse order to m.home/m.away — align it.
   const rev = !liveScoresCache[`${m.home}-${m.away}`] && !!liveScoresCache[`${m.away}-${m.home}`];
   m.homeScore = rev ? lookup.awayScore : lookup.homeScore;
   m.awayScore = rev ? lookup.homeScore : lookup.awayScore;
@@ -1042,7 +999,6 @@ function computePlayerLeagueStandings(standings) {
         { team: m.away, gf: m.awayScore, ga: m.homeScore },
       ].forEach(({ team, gf, ga }) => {
         const player = state.assignments[team];
-        // Gracefully ignore placeholder teams generated in json before tournament completes
         if (!player || !byPlayer[player]) return;
         const agg = byPlayer[player];
         agg.p  += 1;
@@ -1218,29 +1174,24 @@ function buildMatchRow(m, isKO) {
   const timeDisplay = m.matchTime || '';
 
   const statusLabel = isLive
-    ? `<span class="match-status-badge status-live">● LIVE</span>`
+    ? `<span style="color:var(--secondary);font-size:0.68rem;font-weight:bold;">● LIVE</span>`
     : isCompleted
-    ? `<span class="match-status-badge status-ft">FT</span>`
-    : `<span class="match-status-badge status-upcoming">${escapeHTML(dateDisplay)}${timeDisplay ? ' '+escapeHTML(timeDisplay) : ''}</span>`;
-
-  const scorePillClass = isCompleted ? 'is-completed' : (isLive ? 'is-live' : '');
-
-  const homeOwner = state.assignments[m.home] ? `<div class="owner-tag">🎯 ${escapeHTML(state.assignments[m.home])}</div>` : '';
-  const awayOwner = state.assignments[m.away] ? `<div class="owner-tag">🎯 ${escapeHTML(state.assignments[m.away])}</div>` : '';
+    ? `<span style="font-size:0.63rem;color:#718096;">FT</span>`
+    : `<span style="font-size:0.63rem;color:#a0aec0;">${escapeHTML(dateDisplay)}${timeDisplay ? ' '+escapeHTML(timeDisplay) : ''}</span>`;
 
   row.innerHTML = `
     <div class="match-team home">
-      <span>${escapeHTML(m.home)}<br>${homeOwner}</span>
+      <span>${escapeHTML(m.home)}<br><small style="font-weight:normal;color:#718096">(${escapeHTML(state.assignments[m.home]||'')})</small></span>
       ${getFlagImg(m.home)}
     </div>
     <div class="match-centre">
-      <div class="score-pill ${scorePillClass}">${hScore}<span class="vs-sep">–</span>${aScore}</div>
+      <div class="score-line">${hScore} <span style="font-size:0.65rem;color:#a0aec0">v</span> ${aScore}</div>
       ${penLine}
-      <div>${statusLabel}</div>
+      <div style="margin-top:3px;">${statusLabel}</div>
     </div>
     <div class="match-team away">
       ${getFlagImg(m.away)}
-      <span>${escapeHTML(m.away)}<br>${awayOwner}</span>
+      <span>${escapeHTML(m.away)}<br><small style="font-weight:normal;color:#718096">(${escapeHTML(state.assignments[m.away]||'')})</small></span>
     </div>`;
   return row;
 }
@@ -1265,7 +1216,10 @@ function renderBracketUI() {
       const hs  = m.homeScore != null ? m.homeScore : '';
       const as_ = m.awayScore != null ? m.awayScore : '';
 
-      // PENALTY: pen score pills
+      const winner   = getWinner(m);
+      const hWinCls  = winner && winner === m.home ? ' winner' : '';
+      const aWinCls  = winner && winner === m.away ? ' winner' : '';
+
       let hPenPill = '', aPenPill = '';
       if (m.homePens != null && m.awayPens != null) {
         hPenPill = m.penWinner === m.home
@@ -1276,19 +1230,26 @@ function renderBracketUI() {
           : `<span class="pen-pill" style="opacity:0.5;">${m.awayPens}p</span>`;
       }
 
-      // Layout: home team block | score | away team block
-      // Each team block: flag + name on one line, owner on the line below
+      // Layout: two stacked rows, each with flag + team name (+ owner) on the
+      // left and the score on the right — winner row highlighted in green.
       card.innerHTML = `
-        <div style="display:flex;align-items:center;gap:4px;width:100%;">
-          <div class="bracket-team">
-            <div class="bracket-team-name">${getFlagImg(m.home)}<span>${escapeHTML(m.home)}</span>${hPenPill}</div>
-            ${hOwner ? `<div class="bracket-team-owner">${hOwner}</div>` : ''}
+        <div class="bracket-team-row${hWinCls}">
+          <div class="bracket-team-info">
+            ${getFlagImg(m.home)}
+            <span class="bracket-team-name">${escapeHTML(m.home)}</span>
+            ${hPenPill}
+            ${hOwner ? `<span class="bracket-team-owner">(${hOwner})</span>` : ''}
           </div>
-          <div class="bracket-score">${hs}${hs !== '' && as_ !== '' ? ' : ' : ''}${as_}</div>
-          <div class="bracket-team" style="align-items:flex-end;">
-            <div class="bracket-team-name" style="justify-content:flex-end;">${aPenPill}<span>${escapeHTML(m.away)}</span>${getFlagImg(m.away)}</div>
-            ${aOwner ? `<div class="bracket-team-owner" style="text-align:right;">${aOwner}</div>` : ''}
+          <div class="bracket-score">${hs}</div>
+        </div>
+        <div class="bracket-team-row${aWinCls}">
+          <div class="bracket-team-info">
+            ${getFlagImg(m.away)}
+            <span class="bracket-team-name">${escapeHTML(m.away)}</span>
+            ${aPenPill}
+            ${aOwner ? `<span class="bracket-team-owner">(${aOwner})</span>` : ''}
           </div>
+          <div class="bracket-score">${as_}</div>
         </div>`;
       col.appendChild(card);
     });
