@@ -445,9 +445,53 @@ body.dark small { color: #94a3b8; }
 body.dark .bracket-team-owner { color: #94a3b8; }
 body.dark .bracket-round-subtitle { color: #94a3b8; }
 body.dark .bracket-team-row + .bracket-team-row { border-top-color: var(--border); }
+
+/* ── CHAMPION BANNER ───────────────────────────────────────── */
+.champion-banner {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(160deg, rgba(224,191,94,0.20), rgba(191,149,48,0.32));
+  border: 1px solid rgba(224,191,94,0.6);
+  color: #fff3d6;
+  padding: 12px 18px;
+  border-radius: 12px;
+  font-family: 'Manrope', -apple-system, sans-serif;
+  font-weight: 700;
+  font-size: clamp(0.85rem, 3vw, 1.05rem);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+  animation: championGlow 2.4s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
+  flex-wrap: wrap;
+  text-align: center;
+}
+.champion-trophy { font-size: 1.3em; display: inline-block; animation: championBounce 1.6s ease-in-out infinite; }
+.champion-owner { font-weight: 600; color: #fff3d6; opacity: 0.9; }
+@keyframes championGlow {
+  0%, 100% { box-shadow: 0 4px 14px rgba(0,0,0,0.2), 0 0 0 rgba(224,191,94,0); }
+  50%      { box-shadow: 0 4px 20px rgba(0,0,0,0.25), 0 0 22px rgba(224,191,94,0.55); }
+}
+@keyframes championBounce {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+body.dark .champion-banner { color: #fff3d6; }
+
+/* ── CONFETTI CANVAS ───────────────────────────────────────── */
+#confetti-canvas {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+}
 </style>
 </head>
 <body>
+<canvas id="confetti-canvas" class="hidden"></canvas>
 <header>
   <div class="header-inner">
     <img src="https://upload.wikimedia.org/wikipedia/commons/1/17/2026_FIFA_World_Cup_emblem.svg" class="header-logo" alt="FIFA World Cup 2026">
@@ -456,6 +500,7 @@ body.dark .bracket-team-row + .bracket-team-row { border-top-color: var(--border
       <p style="font-size:clamp(0.78rem,2.5vw,1rem);"><span style="color:#00ffcc;">●</span> Live Tournament Feed</p>
     </div>
   </div>
+  <div id="champion-banner" class="champion-banner hidden"></div>
   <div style="margin-top:10px;">
     <button onclick="toggleDarkMode()" id="theme-toggle">🌙 Dark Mode</button>
   </div>
@@ -466,6 +511,7 @@ body.dark .bracket-team-row + .bracket-team-row { border-top-color: var(--border
     <button class="tab-btn setup-tab active" id="btn-tab-setup"        onclick="switchTab('setup')">Generator</button>
     <button class="tab-btn"                  id="btn-tab-assignments"  onclick="switchTab('assignments')">Assignments</button>
     <button class="tab-btn"                  id="btn-tab-playertable"  onclick="switchTab('playertable')">League Table</button>
+    <button class="tab-btn"                  id="btn-tab-goldenboot"   onclick="switchTab('goldenboot')">👢 Golden Boot</button>
     <button class="tab-btn"                  id="btn-tab-groups"       onclick="switchTab('groups')">Groups</button>
     <button class="tab-btn"                  id="btn-tab-fixtures"     onclick="switchTab('fixtures')">Fixtures</button>
     <button class="tab-btn"                  id="btn-tab-bracket"      onclick="switchTab('bracket')">Knockout</button>
@@ -542,6 +588,24 @@ body.dark .bracket-team-row + .bracket-team-row { border-top-color: var(--border
             <tr><th>#</th><th>Participant</th><th>Teams</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th><th>Best Stage</th></tr>
           </thead>
           <tbody id="player-league-rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-goldenboot" class="tab-content hidden">
+    <div class="card">
+      <h2>👢 Golden Boot — Top Scorers</h2>
+      <p style="font-size:0.86rem;color:#718096;margin-bottom:13px;">
+        Ranked by goals scored across the tournament, with the participant who owns each scorer's team.
+      </p>
+      <div id="golden-boot-empty" class="status-banner hidden" style="margin-bottom:13px;">
+        ⚽ No individual goal scorer data is available yet from the results feed for these fixtures — this fills in automatically once scorer-level detail appears.
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>#</th><th>Scorer</th><th>Team</th><th>Participant</th><th>Goals</th></tr></thead>
+          <tbody id="golden-boot-rows"></tbody>
         </table>
       </div>
     </div>
@@ -630,6 +694,7 @@ let liveScoresCache  = {};
 let _lastScoreHash   = '';
 let _fetchFailCount  = 0;
 let leagueTableMode  = 'full'; // 'full' | 'group'
+let _champCelebrated = false;
 window.teamStatuses  = {};
 window.teamBestRound = {};
 window.teamGroupStageResult = {};
@@ -839,6 +904,53 @@ function buildDistributionsString() {
   document.getElementById('output-block').classList.remove('hidden');
 }
 
+// ── GOAL SCORER EXTRACTION (for Golden Boot) ───────────────────────────────
+// Best-effort parsing of individual goal scorers from whatever shape the
+// results feed happens to provide. openfootball's schedule/results json is
+// primarily score-level (not scorer-level), so this checks several known
+// field-name conventions and simply returns empty arrays if none match —
+// the Golden Boot tab shows a clear "not available yet" note in that case
+// rather than guessing or fabricating names.
+function extractGoalsFromMatch(match, home, away) {
+  const homeGoals = [];
+  const awayGoals = [];
+
+  const nameFromEntry = g => {
+    if (typeof g === 'string') return g.replace(/[\d+'\s]+$/, '').trim() || null;
+    if (g && typeof g === 'object') return g.name || g.player || g.scorer || null;
+    return null;
+  };
+  const addFrom = (arr, target) => {
+    if (!Array.isArray(arr)) return;
+    arr.forEach(g => { const n = nameFromEntry(g); if (n) target.push(n); });
+  };
+
+  addFrom(match.team1goals, homeGoals);
+  addFrom(match.team2goals, awayGoals);
+  addFrom(match.goals1, homeGoals);
+  addFrom(match.goals2, awayGoals);
+
+  if (Array.isArray(match.goals)) {
+    match.goals.forEach(g => {
+      const name = nameFromEntry(g);
+      if (!name) return;
+      const isHome = g.team1 === true || g.side === 'home' || g.team === home;
+      (isHome ? homeGoals : awayGoals).push(name);
+    });
+  }
+
+  if (Array.isArray(match.events)) {
+    match.events.filter(e => e && (e.type === 'goal' || e.goal)).forEach(e => {
+      const name = e.player || e.name || e.scorer;
+      if (!name) return;
+      if (e.team === home) homeGoals.push(name);
+      else if (e.team === away) awayGoals.push(name);
+    });
+  }
+
+  return { homeGoals, awayGoals };
+}
+
 // ── LIVE FEED ──────────────────────────────────────────────────────────────
 async function fetchLiveWorldCupScores() {
   setBannerState('loading', `<span class="live-pulse"></span> Fetching 2026 World Cup results…`);
@@ -894,8 +1006,17 @@ async function fetchLiveWorldCupScores() {
         status: 'upcoming',
         matchDate: match.date || '',
         matchTime: match.time || '',
-        location: loc
+        location: loc,
+        homeGoals: [], awayGoals: []
       };
+
+      // Best-effort extraction of individual goal scorers, if the feed
+      // happens to provide them (openfootball's schedule/results json does
+      // not always include scorer-level detail — this degrades gracefully
+      // to an empty list, and the Golden Boot tab shows a note when so).
+      const scorerData = extractGoalsFromMatch(match, home, away);
+      statusObj.homeGoals = scorerData.homeGoals;
+      statusObj.awayGoals = scorerData.awayGoals;
 
       if (match.score && match.score.ft && match.score.ft.length === 2) {
         statusObj.homeScore = match.score.ft[0];
@@ -1061,7 +1182,11 @@ function processAndCalculateStandings() {
   });
 
   const champ = state.koMatches.final.length > 0 ? getWinner(state.koMatches.final[0]) : null;
-  if (champ) { window.teamStatuses[champ]='green'; window.teamBestRound[champ]='champion'; }
+  if (champ) {
+    window.teamStatuses[champ]='green'; window.teamBestRound[champ]='champion';
+    showChampionBanner(champ);
+    if (!_champCelebrated) { _champCelebrated = true; fireConfetti(); }
+  }
 
   window._lastStandings = standings;
 
@@ -1070,6 +1195,7 @@ function processAndCalculateStandings() {
   renderGroupTablesUI(standings, wildcards);
   renderFixturesUI();
   renderBracketUI();
+  renderGoldenBootUI();
 }
 
 // ── KO RESOLUTION ─────────────────────────────────────────────────────────
@@ -1141,6 +1267,206 @@ function getKOPill(team) {
   const entry = map[round];
   if (!entry) return '';
   return `<span class="ko-pill ${entry[0]}">${entry[1]}</span>`;
+}
+
+// ── GOLDEN BOOT ───────────────────────────────────────────────────────────
+function addScorerGoal(scorers, name, team) {
+  const key = `${name}||${team}`;
+  if (!scorers[key]) scorers[key] = { name, team, goals: 0 };
+  scorers[key].goals += 1;
+}
+
+function computeGoldenBoot() {
+  const scorers = {};
+  const allMatches = [...state.groupMatches];
+  ['r32','r16','qf','sf','third','final'].forEach(r => allMatches.push(...(state.koMatches[r] || [])));
+
+  allMatches.forEach(m => {
+    if (!m.home || !m.away) return;
+    const direct = liveScoresCache[`${m.home}-${m.away}`];
+    const rev    = liveScoresCache[`${m.away}-${m.home}`];
+    const lookup = direct || rev;
+    if (!lookup) return;
+    const homeGoals = direct ? lookup.homeGoals : (rev ? rev.awayGoals : []);
+    const awayGoals = direct ? lookup.awayGoals : (rev ? rev.homeGoals : []);
+    (homeGoals || []).forEach(name => addScorerGoal(scorers, name, m.home));
+    (awayGoals || []).forEach(name => addScorerGoal(scorers, name, m.away));
+  });
+
+  return Object.values(scorers).sort((a, b) => b.goals - a.goals);
+}
+
+function renderGoldenBootUI() {
+  const tbody     = document.getElementById('golden-boot-rows');
+  const emptyNote = document.getElementById('golden-boot-empty');
+  if (!tbody) return;
+  const rows = computeGoldenBoot();
+
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    if (emptyNote) emptyNote.classList.remove('hidden');
+    return;
+  }
+  if (emptyNote) emptyNote.classList.add('hidden');
+
+  const topGoals = rows[0].goals;
+  tbody.innerHTML = rows.map((r, idx) => {
+    const player = state.assignments[r.team] || '—';
+    const isTop  = r.goals === topGoals;
+    return `<tr>
+      <td class="rank-cell${idx===0?' rank-1':''}">${idx+1}</td>
+      <td><div class="player-cell-name">${escapeHTML(r.name)}${isTop ? ' <span class="ko-pill ko-pill-champion">👢 Golden Boot</span>' : ''}</div></td>
+      <td><div class="team-cell">${getFlagImg(r.team)}<span>${escapeHTML(r.team)}</span></div></td>
+      <td>${escapeHTML(player)}</td>
+      <td class="pts-cell">${r.goals}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── CHAMPION CELEBRATION ──────────────────────────────────────────────────
+function showChampionBanner(team) {
+  const el = document.getElementById('champion-banner');
+  if (!el) return;
+  const owner = state.assignments[team] ? escapeHTML(state.assignments[team]) : '';
+  el.innerHTML = `<span class="champion-trophy">🏆</span> <span>${getFlagImg(team)} <strong>${escapeHTML(team)}</strong> are 2026 World Cup Champions!</span>${owner ? ` <span class="champion-owner">— won by ${owner}</span>` : ''}`;
+  el.classList.remove('hidden');
+}
+
+// Lightweight canvas confetti burst — no external library so the app stays
+// a single self-contained file. Fires once per page load, the moment the
+// Final's winner is resolved.
+// ── CHAMPION CELEBRATION ──────────────────────────────────────────────────
+function fireConfetti() {
+  const canvas = document.getElementById('confetti-canvas');
+  if (!canvas) return;
+
+  canvas.classList.remove('hidden');
+
+  const ctx = canvas.getContext('2d');
+
+  const resize = () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  };
+
+  resize();
+
+  const colors = [
+    '#bf9530',
+    '#e0bf5e',
+    '#0d8a52',
+    '#cf3838',
+    '#1e4d9e',
+    '#ffffff'
+  ];
+
+  const particles = Array.from({ length: 160 }, () => ({
+    x: Math.random() * canvas.width,
+    y: -20 - Math.random() * (canvas.height * 0.5),
+
+    r: 4 + Math.random() * 5,
+
+    vx: -1.5 + Math.random() * 3,
+    vy: 2 + Math.random() * 3,
+
+    rot: Math.random() * 360,
+    vr: -6 + Math.random() * 12,
+
+    drift: 0.01 + Math.random() * 0.04,
+    phase: Math.random() * Math.PI * 2,
+
+    color: colors[Math.floor(Math.random() * colors.length)],
+    shape: Math.random() < 0.5 ? 'rect' : 'circle'
+  }));
+
+  let resizeHandler;
+
+  function frame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+
+      // Gravity
+      p.vy += 0.03;
+
+      // Flutter effect
+      p.phase += p.drift;
+
+      p.x += p.vx + Math.sin(p.phase) * 0.5;
+      p.y += p.vy;
+
+      p.rot += p.vr;
+
+      // Remove particle once it leaves the screen
+      if (p.y > canvas.height + p.r + 30) {
+        particles.splice(i, 1);
+        continue;
+      }
+
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot * Math.PI / 180);
+      ctx.fillStyle = p.color;
+
+      if (p.shape === 'rect') {
+        ctx.fillRect(
+          -p.r,
+          -p.r * 0.6,
+          p.r * 2,
+          p.r * 1.2
+        );
+      } else {
+        ctx.beginPath();
+        ctx.arc(0, 0, p.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    // Stop when all confetti has fallen away
+    if (particles.length > 0) {
+      requestAnimationFrame(frame);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.classList.add('hidden');
+
+      if (resizeHandler) {
+        window.removeEventListener('resize', resizeHandler);
+      }
+    }
+  }
+
+  resizeHandler = () => resize();
+  window.addEventListener('resize', resizeHandler, { passive: true });
+
+  requestAnimationFrame(frame);
+}
+
+  const start = performance.now();
+  function frame(now) {
+    const elapsed = now - start;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot * Math.PI / 180);
+      ctx.fillStyle = p.color;
+      if (p.shape === 'rect') ctx.fillRect(-p.r, -p.r * 0.6, p.r * 2, p.r * 1.2);
+      else { ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore();
+    });
+    if (elapsed < durationMs) {
+      requestAnimationFrame(frame);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.classList.add('hidden');
+    }
+  }
+  requestAnimationFrame(frame);
+  window.addEventListener('resize', resize);
 }
 
 // ── PLAYER LEAGUE TABLE ───────────────────────────────────────────────────
